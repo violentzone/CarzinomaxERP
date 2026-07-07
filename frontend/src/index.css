@@ -1,0 +1,240 @@
+/* ============================================================================
+   Carzinomax ERP — Design System
+   Violet / electric theme. Light + dark via prefers-color-scheme AND a manual
+   [data-theme] override on <html>. Motion-forward, glassy, youthful.
+   ========================================================================== */
+
+:root {
+  /* Brand ramp — violet / electric */
+  --violet-50: #f6f0ff;
+  --violet-100: #ece0ff;
+  --violet-200: #d8c0ff;
+  --violet-300: #bd93ff;
+  --violet-400: #a462ff;
+  --violet-500: #aa3bff; /* primary accent (matches original scaffold) */
+  --violet-600: #8b1fe0;
+  --violet-700: #6d16b0;
+  --violet-800: #4d1080;
+  --cyan-400: #22d3ee;
+  --pink-400: #f472d0;
+
+  /* Semantic accent aliases */
+  --accent: var(--violet-500);
+  --accent-strong: var(--violet-600);
+  --accent-contrast: #ffffff;
+  --grad-brand: linear-gradient(135deg, #aa3bff 0%, #7c3aed 45%, #22d3ee 130%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(170, 59, 255, 0.16), rgba(34, 211, 238, 0.12));
+  --grad-pink: linear-gradient(135deg, #f472d0 0%, #aa3bff 100%);
+
+  /* Status hues */
+  --success: #16b364;
+  --warning: #f79009;
+  --danger: #f04438;
+  --info: #2e90fa;
+
+  /* Radii */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /* Spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  /* Typography */
+  --sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+
+  --sidebar-w: 264px;
+  --topbar-h: 68px;
+
+  color-scheme: light dark;
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* -------- Light theme (default) -------- */
+:root,
+:root[data-theme='light'] {
+  --bg: #f7f6fb;
+  --bg-grid: rgba(124, 58, 237, 0.05);
+  --surface: #ffffff;
+  --surface-2: #faf9fe;
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --surface-inset: #f2f0f9;
+  --border: #e9e6f2;
+  --border-strong: #ddd8ec;
+  --text: #3b3550;
+  --text-h: #17132a;
+  --text-dim: #8b849e;
+  --shadow-sm: 0 1px 2px rgba(23, 19, 42, 0.06), 0 1px 3px rgba(23, 19, 42, 0.05);
+  --shadow-md: 0 8px 24px -10px rgba(76, 16, 128, 0.22);
+  --shadow-lg: 0 24px 60px -20px rgba(76, 16, 128, 0.32);
+  --glow: 0 0 0 4px rgba(170, 59, 255, 0.14);
+}
+
+/* -------- Dark theme -------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0c0a14;
+    --bg-grid: rgba(170, 59, 255, 0.06);
+    --surface: #16121f;
+    --surface-2: #1b1626;
+    --surface-glass: rgba(24, 19, 34, 0.68);
+    --surface-inset: #221b30;
+    --border: #2a2338;
+    --border-strong: #3a3150;
+    --text: #b9b2cc;
+    --text-h: #f4f1fb;
+    --text-dim: #7d7591;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 30px 70px -24px rgba(0, 0, 0, 0.8);
+    --glow: 0 0 0 4px rgba(170, 59, 255, 0.22);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0c0a14;
+  --bg-grid: rgba(170, 59, 255, 0.06);
+  --surface: #16121f;
+  --surface-2: #1b1626;
+  --surface-glass: rgba(24, 19, 34, 0.68);
+  --surface-inset: #221b30;
+  --border: #2a2338;
+  --border-strong: #3a3150;
+  --text: #b9b2cc;
+  --text-h: #f4f1fb;
+  --text-dim: #7d7591;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 30px 70px -24px rgba(0, 0, 0, 0.8);
+  --glow: 0 0 0 4px rgba(170, 59, 255, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 100% -10%, rgba(170, 59, 255, 0.12), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(34, 211, 238, 0.1), transparent 55%),
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  color: var(--text-h);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--surface-inset);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  color: var(--text-h);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+  background-clip: padding-box;
+}
+
+/* ------------------------------ Utilities ------------------------------ */
+.gradient-text {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+.muted { color: var(--text-dim); }
+.mono { font-family: var(--mono); }
+
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.gap-1 { gap: var(--s-1); }
+.gap-2 { gap: var(--s-2); }
+.gap-3 { gap: var(--s-3); }
+.gap-4 { gap: var(--s-4); }
+.gap-5 { gap: var(--s-5); }
+.grow { flex: 1 1 auto; }
+.wrap { flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+.center { justify-content: center; }
+.items-end { align-items: flex-end; }
+
+.grid { display: grid; gap: var(--s-4); }
+.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 900px) {
+  .cols-2, .cols-3, .cols-4 { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

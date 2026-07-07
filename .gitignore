@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Logs & runtime data
+logs/
+*.log
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Private strategy brain (personal notes + decisions — do NOT publish)
+MasterBrain/
+AGENTS.md
+CLAUDE.md

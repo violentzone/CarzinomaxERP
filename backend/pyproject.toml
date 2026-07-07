@@ -1,0 +1,37 @@
+[project]
+name = "carzinomaxerp"
+version = "0.1.0"
+description = "The open-source ERP where AI does the data entry."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic==1.18.5",
+    "annotated-doc==0.0.4",
+    "annotated-types==0.7.0",
+    "anyio==4.14.1",
+    "asyncpg==0.31.0",
+    "bcrypt==5.0.0",
+    "click==8.4.2",
+    "colorama==0.4.6",
+    "dnspython==2.8.0",
+    "email-validator==2.3.0",
+    "fastapi==0.139.0",
+    "greenlet==3.5.3",
+    "h11==0.16.0",
+    "idna==3.18",
+    "loguru>=0.7.3",
+    "mako==1.3.12",
+    "markupsafe==3.0.3",
+    "pydantic==2.13.4",
+    "pydantic-core==2.46.4",
+    "pydantic-settings==2.14.2",
+    "pyjwt==2.13.0",
+    "python-dotenv==1.2.2",
+    "python-multipart==0.0.32",
+    "sqlalchemy==2.0.51",
+    "starlette==1.3.1",
+    "typing-extensions==4.15.0",
+    "typing-inspection==0.4.2",
+    "uvicorn==0.49.0",
+]
