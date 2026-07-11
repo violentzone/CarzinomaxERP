@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Wallet } from 'lucide-react'
+import { Wallet, Pencil, Trash2, X } from 'lucide-react'
 import { hrApi } from '../../api/hr'
 import { useList } from '../../lib/useList'
 import { useToast } from '../../context/ToastContext'
@@ -8,6 +8,7 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import AccessDenied from '../../components/ui/AccessDenied'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import SessionList from '../../components/ui/SessionList'
 import { SchemaForm } from '../../components/SchemaForm'
 
@@ -23,6 +24,9 @@ export default function PaychecksSection() {
   const [values, setValues] = useState({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
   const [created, setCreated] = useState([])
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState(null) // paycheck being edited, null = create
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
   if (denied) return <AccessDenied module="People & HR" />
 
@@ -44,27 +48,68 @@ export default function PaychecksSection() {
     { key: 'status', label: 'Status', type: 'select', options: STATUSES, default: 'draft' },
   ]
 
+  const resetForm = () => {
+    setEditingId(null)
+    setValues({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     setSaving(true)
     try {
-      const paycheck = await hrApi.createPaycheck({
+      const payload = {
         employee_id: num(values.employee_id),
         pay_period_start: values.pay_period_start,
         pay_period_end: values.pay_period_end,
         base_salary: num(values.base_salary),
         allowances: num(values.allowances),
         deductions: num(values.deductions),
-        payment_date: values.payment_date || undefined,
+        payment_date: values.payment_date || (editingId ? null : undefined),
         status: values.status || 'draft',
-      })
-      setCreated((c) => [{ ...paycheck }, ...c])
-      toast.success('Paycheck generated')
-      setValues({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
+      }
+      if (editingId) {
+        const paycheck = await hrApi.updatePaycheck(editingId, payload)
+        setCreated((c) => c.map((p) => (p.id === editingId ? { ...paycheck } : p)))
+        toast.success('Paycheck updated')
+      } else {
+        const paycheck = await hrApi.createPaycheck(payload)
+        setCreated((c) => [{ ...paycheck }, ...c])
+        toast.success('Paycheck generated')
+      }
+      resetForm()
     } catch (err) {
-      toast.error(err?.detail || 'Could not generate paycheck')
+      toast.error(err?.detail || (editingId ? 'Could not update paycheck' : 'Could not generate paycheck'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startEdit = (row) => {
+    setEditingId(row.id)
+    setValues({
+      employee_id: String(row.employee_id),
+      pay_period_start: row.pay_period_start,
+      pay_period_end: row.pay_period_end,
+      base_salary: row.base_salary,
+      allowances: row.allowances,
+      deductions: row.deductions,
+      payment_date: row.payment_date || '',
+      status: row.status || 'draft',
+    })
+  }
+
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await hrApi.deletePaycheck(pendingRemove.id)
+      setCreated((c) => c.filter((p) => p.id !== pendingRemove.id))
+      if (pendingRemove.id === editingId) resetForm()
+      toast.success('Paycheck deleted')
+      setPendingRemove(null)
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete paycheck')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -72,9 +117,14 @@ export default function PaychecksSection() {
     <div>
       <div className="section-toolbar">
         <div>
-          <h2>Generate paycheck</h2>
+          <h2>{editingId ? `Edit paycheck #${editingId}` : 'Generate paycheck'}</h2>
           <div className="muted">Net pay is base salary plus allowances, less deductions.</div>
         </div>
+        {editingId && (
+          <Button variant="outline" icon={X} onClick={resetForm}>
+            Cancel edit
+          </Button>
+        )}
       </div>
 
       <Card className="card-pad" style={{ maxWidth: 640 }}>
@@ -97,8 +147,8 @@ export default function PaychecksSection() {
           </div>
 
           <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" icon={Wallet} loading={saving}>
-              Generate paycheck
+            <Button type="submit" icon={editingId ? Pencil : Wallet} loading={saving}>
+              {editingId ? 'Save changes' : 'Generate paycheck'}
             </Button>
           </div>
         </form>
@@ -114,7 +164,42 @@ export default function PaychecksSection() {
           { key: 'base_salary', header: 'Base', align: 'right', render: (r) => <span className="cell-num">{currency(r.base_salary)}</span> },
           { key: 'net_pay', header: 'Net pay', align: 'right', render: (r) => <span className="cell-num">{currency(r.net_pay)}</span> },
           { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            render: (r) => (
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => startEdit(r)}
+                  aria-label="Edit paycheck"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn line-remove"
+                  onClick={() => setPendingRemove(r)}
+                  aria-label="Delete paycheck"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </span>
+            ),
+          },
         ]}
+      />
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={removing}
+        title="Delete paycheck"
+        message="This will permanently delete this paycheck."
+        hint={pendingRemove ? `${empMap[String(pendingRemove.employee_id)] || `#${pendingRemove.employee_id}`} · net pay ${currency(pendingRemove.net_pay)}` : undefined}
       />
     </div>
   )

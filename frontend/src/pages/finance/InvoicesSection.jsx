@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { financeApi } from '../../api/finance'
 import { useList } from '../../lib/useList'
 import { useToast } from '../../context/ToastContext'
@@ -9,6 +9,7 @@ import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
 import Badge from '../../components/ui/Badge'
 import AccessDenied from '../../components/ui/AccessDenied'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Select } from '../../components/ui/Field'
 import { SchemaForm } from '../../components/SchemaForm'
 import LineItemsEditor from '../../components/ui/LineItemsEditor'
@@ -51,9 +52,12 @@ export default function InvoicesSection() {
   )
 
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(null) // invoice being edited, null = create
   const [header, setHeader] = useState({ invoice_type: 'customer', status: 'draft', issue_date: today(), due_date: today() })
   const [lines, setLines] = useState([blankLine()])
   const [saving, setSaving] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
   if (denied) return <AccessDenied module="Finance" />
 
@@ -62,8 +66,31 @@ export default function InvoicesSection() {
   const total = subtotal + tax
 
   const openModal = () => {
+    setEditing(null)
     setHeader({ invoice_type: 'customer', status: 'draft', issue_date: today(), due_date: today() })
     setLines([blankLine()])
+    setOpen(true)
+  }
+
+  const openEdit = (row) => {
+    setEditing(row)
+    setHeader({
+      invoice_number: row.invoice_number,
+      partner_name: row.partner_name,
+      invoice_type: row.invoice_type,
+      status: row.status || 'draft',
+      issue_date: row.issue_date,
+      due_date: row.due_date,
+    })
+    setLines(
+      (row.lines || []).map((l) => ({
+        _key: ++seq,
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_rate: l.tax_rate,
+      })),
+    )
     setOpen(true)
   }
 
@@ -71,7 +98,7 @@ export default function InvoicesSection() {
     e.preventDefault()
     setSaving(true)
     try {
-      await financeApi.createInvoice({
+      const payload = {
         invoice_number: header.invoice_number,
         partner_name: header.partner_name,
         invoice_type: header.invoice_type,
@@ -84,14 +111,34 @@ export default function InvoicesSection() {
           unit_price: num(l.unit_price),
           tax_rate: num(l.tax_rate),
         })),
-      })
-      toast.success(`Invoice ${header.invoice_number} created`)
+      }
+      if (editing) {
+        await financeApi.updateInvoice(editing.id, payload)
+        toast.success(`Invoice ${header.invoice_number} updated`)
+      } else {
+        await financeApi.createInvoice(payload)
+        toast.success(`Invoice ${header.invoice_number} created`)
+      }
       setOpen(false)
       reload()
     } catch (err) {
-      toast.error(err?.detail || 'Could not create invoice')
+      toast.error(err?.detail || (editing ? 'Could not update invoice' : 'Could not create invoice'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await financeApi.deleteInvoice(pendingRemove.id)
+      toast.success(`Invoice ${pendingRemove.invoice_number} deleted`)
+      setPendingRemove(null)
+      reload()
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete invoice')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -123,6 +170,32 @@ export default function InvoicesSection() {
           { key: 'due_date', header: 'Due', render: (r) => fmtDate(r.due_date) },
           { key: 'total_amount', header: 'Total', align: 'right', render: (r) => <span className="cell-num">{currency(r.total_amount)}</span> },
           { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            width: 80,
+            render: (r) => (
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => openEdit(r)}
+                  aria-label="Edit invoice"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn line-remove"
+                  onClick={() => setPendingRemove(r)}
+                  aria-label="Delete invoice"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </span>
+            ),
+          },
         ]}
         rows={rows}
         loading={loading}
@@ -132,13 +205,13 @@ export default function InvoicesSection() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="New invoice"
+        title={editing ? 'Edit invoice' : 'New invoice'}
         subtitle="Tax and totals are computed from the lines below."
         size="lg"
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" form="invoice-form" loading={saving}>Create invoice</Button>
+            <Button type="submit" form="invoice-form" loading={saving}>{editing ? 'Save changes' : 'Create invoice'}</Button>
           </>
         }
       >
@@ -166,6 +239,16 @@ export default function InvoicesSection() {
           />
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={removing}
+        title="Delete invoice"
+        message="This will permanently delete this invoice."
+        hint="Its lines will be deleted; recorded payments are kept and unlinked."
+      />
     </div>
   )
 }

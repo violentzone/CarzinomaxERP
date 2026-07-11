@@ -11,6 +11,10 @@ class ProductCategoryBase(BaseModel):
 class ProductCategoryCreate(ProductCategoryBase):
     pass
 
+class ProductCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 class ProductCategoryResponse(ProductCategoryBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -27,6 +31,14 @@ class ProductBase(BaseModel):
 class ProductCreate(ProductBase):
     pass
 
+class ProductUpdate(BaseModel):
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    unit_price: Optional[Decimal] = None
+    cost: Optional[Decimal] = None
+    category_id: Optional[int] = None
+
 class ProductResponse(ProductBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -40,6 +52,11 @@ class WarehouseBase(BaseModel):
 class WarehouseCreate(WarehouseBase):
     pass
 
+class WarehouseUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    location: Optional[str] = None
+
 class WarehouseResponse(WarehouseBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -52,6 +69,9 @@ class InventoryStockBase(BaseModel):
 
 class InventoryStockCreate(InventoryStockBase):
     pass
+
+class InventoryStockUpdate(BaseModel):
+    quantity: Decimal  # manual stock adjustment; a movement is logged
 
 class InventoryStockResponse(InventoryStockBase):
     id: int
@@ -83,6 +103,13 @@ class VendorBase(BaseModel):
 class VendorCreate(VendorBase):
     pass
 
+class VendorUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
 class VendorResponse(VendorBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -112,6 +139,14 @@ class PurchaseOrderBase(BaseModel):
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     lines: List[PurchaseOrderLineCreate]
+
+class PurchaseOrderUpdate(BaseModel):
+    vendor_id: Optional[int] = None
+    po_number: Optional[str] = None
+    order_date: Optional[date] = None
+    delivery_date: Optional[date] = None
+    status: Optional[str] = None
+    lines: Optional[List[PurchaseOrderLineCreate]] = None  # replaces all lines when provided
 
 class PurchaseOrderResponse(PurchaseOrderBase):
     id: int
@@ -144,6 +179,16 @@ class ShipmentBase(BaseModel):
 
 class ShipmentCreate(ShipmentBase):
     items: List[ShipmentItemCreate]
+
+class ShipmentUpdate(BaseModel):
+    shipment_number: Optional[str] = None
+    order_reference: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_number: Optional[str] = None
+    status: Optional[str] = None
+    shipped_date: Optional[date] = None
+    estimated_delivery_date: Optional[date] = None
+    items: Optional[List[ShipmentItemCreate]] = None  # replaces all items when provided
 
 class ShipmentResponse(ShipmentBase):
     id: int

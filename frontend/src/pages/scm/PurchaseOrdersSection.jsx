@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShoppingCart, PackageCheck } from 'lucide-react'
+import { ShoppingCart, PackageCheck, Pencil, Trash2, X } from 'lucide-react'
 import { scmApi } from '../../api/scm'
 import { useList } from '../../lib/useList'
 import { useToast } from '../../context/ToastContext'
@@ -8,6 +8,7 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import AccessDenied from '../../components/ui/AccessDenied'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import SessionList from '../../components/ui/SessionList'
 import { Select } from '../../components/ui/Field'
 import { SchemaForm } from '../../components/SchemaForm'
@@ -73,6 +74,9 @@ export default function PurchaseOrdersSection() {
   const [lines, setLines] = useState([blankLine()])
   const [created, setCreated] = useState([])
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState(null) // purchase order being edited, null = create
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
   if (denied) return <AccessDenied module="Supply Chain" />
 
@@ -82,6 +86,12 @@ export default function PurchaseOrdersSection() {
   const total = lines.reduce((s, l) => s + lineTotal(l), 0)
   const allProducts = lines.every((l) => l.product_id)
 
+  const resetForm = () => {
+    setEditingId(null)
+    setHeader({ order_date: today(), status: 'draft', vendor_id: '', po_number: '', delivery_date: '' })
+    setLines([blankLine()])
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     if (!allProducts) {
@@ -90,26 +100,59 @@ export default function PurchaseOrdersSection() {
     }
     setSaving(true)
     try {
-      const po = await scmApi.createPurchaseOrder({
+      const payload = {
         vendor_id: num(header.vendor_id),
         po_number: header.po_number,
         order_date: header.order_date,
-        delivery_date: header.delivery_date || undefined,
+        delivery_date: header.delivery_date || (editingId ? null : undefined),
         status: header.status || 'draft',
         lines: lines.map((l) => ({
           product_id: num(l.product_id),
           quantity: num(l.quantity),
           unit_price: num(l.unit_price),
         })),
-      })
-      setCreated((c) => [{ ...po, _vendor: vendorName.get(String(header.vendor_id)) }, ...c])
-      toast.success(`Purchase order ${header.po_number} created`)
-      setHeader({ order_date: today(), status: 'draft', vendor_id: '', po_number: '', delivery_date: '' })
-      setLines([blankLine()])
+      }
+      if (editingId) {
+        const po = await scmApi.updatePurchaseOrder(editingId, payload)
+        setCreated((c) => c.map((p) => (p.id === editingId ? { ...po, _vendor: vendorName.get(String(header.vendor_id)) } : p)))
+        toast.success(`Purchase order ${header.po_number} updated`)
+      } else {
+        const po = await scmApi.createPurchaseOrder(payload)
+        setCreated((c) => [{ ...po, _vendor: vendorName.get(String(header.vendor_id)) }, ...c])
+        toast.success(`Purchase order ${header.po_number} created`)
+      }
+      resetForm()
     } catch (err) {
-      toast.error(err?.detail || 'Could not create purchase order')
+      toast.error(err?.detail || (editingId ? 'Could not update purchase order' : 'Could not create purchase order'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startEdit = (row) => {
+    setEditingId(row.id)
+    setHeader({
+      vendor_id: String(row.vendor_id),
+      po_number: row.po_number,
+      order_date: row.order_date,
+      delivery_date: row.delivery_date || '',
+      status: row.status || 'draft',
+    })
+    setLines((row.lines || []).map((l) => ({ _key: ++seq, product_id: String(l.product_id), quantity: l.quantity, unit_price: l.unit_price })))
+  }
+
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await scmApi.deletePurchaseOrder(pendingRemove.id)
+      setCreated((c) => c.filter((p) => p.id !== pendingRemove.id))
+      if (pendingRemove.id === editingId) resetForm()
+      toast.success('Purchase order deleted')
+      setPendingRemove(null)
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete purchase order')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -120,9 +163,14 @@ export default function PurchaseOrdersSection() {
     <div>
       <div className="section-toolbar">
         <div>
-          <h2>New purchase order</h2>
+          <h2>{editingId ? `Edit purchase order #${editingId}` : 'New purchase order'}</h2>
           <div className="muted">Order goods from a vendor, then receive them into a warehouse.</div>
         </div>
+        {editingId && (
+          <Button variant="outline" icon={X} onClick={resetForm}>
+            Cancel edit
+          </Button>
+        )}
       </div>
 
       <Card className="card-pad">
@@ -133,7 +181,7 @@ export default function PurchaseOrdersSection() {
               { key: 'po_number', label: 'PO number', required: true, placeholder: 'PO-1001' },
               { key: 'order_date', label: 'Order date', type: 'date', required: true, default: today() },
               { key: 'delivery_date', label: 'Delivery date', type: 'date' },
-              { key: 'status', label: 'Status', type: 'select', default: 'draft', options: STATUSES },
+              { key: 'status', label: 'Status', type: 'select', default: 'draft', options: editingId ? STATUSES.filter((s) => s.value !== 'received') : STATUSES },
             ]}
             values={header}
             setField={(k, v) => setHeader((s) => ({ ...s, [k]: v }))}
@@ -156,8 +204,8 @@ export default function PurchaseOrdersSection() {
           />
 
           <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" icon={ShoppingCart} loading={saving} disabled={!allProducts}>
-              Create purchase order
+            <Button type="submit" icon={editingId ? Pencil : ShoppingCart} loading={saving} disabled={!allProducts}>
+              {editingId ? 'Save changes' : 'Create purchase order'}
             </Button>
           </div>
         </form>
@@ -172,7 +220,43 @@ export default function PurchaseOrdersSection() {
           { key: 'total_amount', header: 'Total', align: 'right', render: (r) => <span className="cell-num">{currency(r.total_amount)}</span> },
           { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
           { key: 'receive', header: 'Receive', align: 'right', render: (r) => <ReceiveControl po={r} warehouses={warehouses} onReceived={onReceived} /> },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            render: (r) =>
+              r.status === 'received' ? null : (
+                <span className="row-actions">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => startEdit(r)}
+                    aria-label="Edit purchase order"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn line-remove"
+                    onClick={() => setPendingRemove(r)}
+                    aria-label="Delete purchase order"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </span>
+              ),
+          },
         ]}
+      />
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={removing}
+        title="Delete purchase order"
+        message="This will permanently delete this purchase order."
+        hint="Received purchase orders cannot be deleted."
       />
     </div>
   )

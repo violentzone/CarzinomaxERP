@@ -90,6 +90,21 @@ export function apiPost(path, body) {
   }).then(parse)
 }
 
+export function apiPut(path, body) {
+  return fetch(`${BASE_URL}${path}`, {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  }).then(parse)
+}
+
+export function apiDelete(path) {
+  return fetch(`${BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  }).then(parse)
+}
+
 /** OAuth2 password login — the backend expects url-encoded form data. */
 export function apiLogin(email, password) {
   const form = new URLSearchParams()

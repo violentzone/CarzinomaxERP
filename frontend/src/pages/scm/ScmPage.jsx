@@ -47,6 +47,11 @@ function ProductsSection() {
       create={scmApi.createProduct}
       createLabel="New product"
       createTitle="New product"
+      update={(row, payload) => scmApi.updateProduct(row.id, payload)}
+      updateTitle="Edit product"
+      remove={(row) => scmApi.deleteProduct(row.id)}
+      removeLabel="product"
+      removeHint="Its stock records and movements will also be deleted."
       emptyHint="Add your first product to start tracking stock."
       columns={[
         { key: 'sku', header: 'SKU', render: (r) => <span className="mono cell-strong">{r.sku}</span> },
@@ -58,7 +63,7 @@ function ProductsSection() {
       fields={[
         { key: 'sku', label: 'SKU', required: true, placeholder: 'SKU-001' },
         { key: 'name', label: 'Name', required: true, placeholder: 'Wireless mouse' },
-        { key: 'description', label: 'Description', type: 'textarea', full: true },
+        { key: 'description', label: 'Description', type: 'textarea', full: true, nullable: true },
         { key: 'unit_price', label: 'Unit price', type: 'number', step: '0.01' },
         { key: 'cost', label: 'Cost', type: 'number', step: '0.01' },
         {
@@ -97,6 +102,11 @@ export default function ScmPage() {
             create={scmApi.createCategory}
             createLabel="New category"
             createTitle="New category"
+            update={(row, payload) => scmApi.updateCategory(row.id, payload)}
+            updateTitle="Edit category"
+            remove={(row) => scmApi.deleteCategory(row.id)}
+            removeLabel="category"
+            removeHint="Categories that still have products cannot be deleted."
             emptyHint="Create a category to classify your products."
             columns={[
               { key: 'name', header: 'Name', render: (r) => <span className="cell-strong">{r.name}</span> },
@@ -104,7 +114,7 @@ export default function ScmPage() {
             ]}
             fields={[
               { key: 'name', label: 'Name', required: true, placeholder: 'Electronics' },
-              { key: 'description', label: 'Description', type: 'textarea', full: true },
+              { key: 'description', label: 'Description', type: 'textarea', full: true, nullable: true },
             ]}
           />
         )}
@@ -120,6 +130,11 @@ export default function ScmPage() {
             create={scmApi.createWarehouse}
             createLabel="New warehouse"
             createTitle="New warehouse"
+            update={(row, payload) => scmApi.updateWarehouse(row.id, payload)}
+            updateTitle="Edit warehouse"
+            remove={(row) => scmApi.deleteWarehouse(row.id)}
+            removeLabel="warehouse"
+            removeHint="Its stock records and movements will also be deleted."
             emptyHint="Add a warehouse to store and move inventory."
             columns={[
               { key: 'code', header: 'Code', render: (r) => <span className="mono cell-strong">{r.code}</span> },
@@ -129,7 +144,7 @@ export default function ScmPage() {
             fields={[
               { key: 'code', label: 'Code', required: true, placeholder: 'WH-01' },
               { key: 'name', label: 'Name', required: true, placeholder: 'Central warehouse' },
-              { key: 'location', label: 'Location', placeholder: 'City, country' },
+              { key: 'location', label: 'Location', nullable: true, placeholder: 'City, country' },
             ]}
           />
         )}
@@ -145,6 +160,11 @@ export default function ScmPage() {
             create={scmApi.createVendor}
             createLabel="New vendor"
             createTitle="New vendor"
+            update={(row, payload) => scmApi.updateVendor(row.id, payload)}
+            updateTitle="Edit vendor"
+            remove={(row) => scmApi.deleteVendor(row.id)}
+            removeLabel="vendor"
+            removeHint="Vendors with purchase orders cannot be deleted."
             emptyHint="Add a vendor before raising purchase orders."
             columns={[
               { key: 'code', header: 'Code', render: (r) => <span className="mono cell-strong">{r.code}</span> },
@@ -155,9 +175,9 @@ export default function ScmPage() {
             fields={[
               { key: 'code', label: 'Code', required: true, placeholder: 'VEN-01' },
               { key: 'name', label: 'Name', required: true, placeholder: 'Acme Supplies' },
-              { key: 'email', label: 'Email', type: 'email', placeholder: 'sales@acme.com' },
-              { key: 'phone', label: 'Phone', placeholder: '+1 555 0100' },
-              { key: 'address', label: 'Address', type: 'textarea', full: true },
+              { key: 'email', label: 'Email', type: 'email', nullable: true, placeholder: 'sales@acme.com' },
+              { key: 'phone', label: 'Phone', nullable: true, placeholder: '+1 555 0100' },
+              { key: 'address', label: 'Address', type: 'textarea', full: true, nullable: true },
             ]}
           />
         )}

@@ -40,6 +40,11 @@ export default function HrPage() {
             create={hrApi.createDepartment}
             createLabel="New department"
             createTitle="New department"
+            update={(row, payload) => hrApi.updateDepartment(row.id, payload)}
+            updateTitle="Edit department"
+            remove={(row) => hrApi.deleteDepartment(row.id)}
+            removeLabel="department"
+            removeHint="Employees in this department will be unassigned, not deleted."
             emptyHint="Create your first department to group employees."
             columns={[
               { key: 'code', header: 'Code', render: (r) => <span className="mono cell-strong">{r.code}</span> },
@@ -49,7 +54,7 @@ export default function HrPage() {
             fields={[
               { key: 'code', label: 'Department code', required: true, placeholder: 'ENG' },
               { key: 'name', label: 'Name', required: true, placeholder: 'Engineering' },
-              { key: 'manager_id', label: 'Manager ID', type: 'number', min: 0, hint: 'Employee ID of the department manager.' },
+              { key: 'manager_id', label: 'Manager ID', type: 'number', min: 0, nullable: true, hint: 'Employee ID of the department manager.' },
             ]}
           />
         )}

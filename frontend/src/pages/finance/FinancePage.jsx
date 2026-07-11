@@ -52,6 +52,11 @@ export default function FinancePage() {
             create={financeApi.createAccount}
             createLabel="New account"
             createTitle="New GL account"
+            update={(row, payload) => financeApi.updateAccount(row.id, payload)}
+            updateTitle="Edit GL account"
+            remove={(row) => financeApi.deleteAccount(row.id)}
+            removeLabel="GL account"
+            removeHint="Accounts used by journal entries cannot be deleted."
             columns={[
               { key: 'code', header: 'Code', render: (r) => <span className="mono cell-strong">{r.code}</span> },
               { key: 'name', header: 'Name', render: (r) => <span className="cell-strong">{r.name}</span> },
@@ -62,7 +67,7 @@ export default function FinancePage() {
               { key: 'code', label: 'Account code', required: true, placeholder: '1000' },
               { key: 'name', label: 'Name', required: true, placeholder: 'Cash & equivalents' },
               { key: 'type', label: 'Type', type: 'select', required: true, options: ACCOUNT_TYPES },
-              { key: 'description', label: 'Description', type: 'textarea', full: true },
+              { key: 'description', label: 'Description', type: 'textarea', full: true, nullable: true },
             ]}
           />
         )}
@@ -79,6 +84,10 @@ export default function FinancePage() {
             create={financeApi.createFixedAsset}
             createLabel="New asset"
             createTitle="Register fixed asset"
+            update={(row, payload) => financeApi.updateFixedAsset(row.id, payload)}
+            updateTitle="Edit fixed asset"
+            remove={(row) => financeApi.deleteFixedAsset(row.id)}
+            removeLabel="fixed asset"
             columns={[
               { key: 'asset_code', header: 'Code', render: (r) => <span className="mono cell-strong">{r.asset_code}</span> },
               { key: 'name', header: 'Name', render: (r) => <span className="cell-strong">{r.name}</span> },

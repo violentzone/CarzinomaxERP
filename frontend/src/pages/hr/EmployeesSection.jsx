@@ -24,7 +24,7 @@ export default function EmployeesSection() {
     { key: 'first_name', label: 'First name', required: true, placeholder: 'Ada' },
     { key: 'last_name', label: 'Last name', required: true, placeholder: 'Lovelace' },
     { key: 'email', label: 'Email', type: 'email', required: true, placeholder: 'ada@company.com' },
-    { key: 'phone', label: 'Phone', placeholder: '+1 555 0100' },
+    { key: 'phone', label: 'Phone', nullable: true, placeholder: '+1 555 0100' },
     { key: 'hire_date', label: 'Hire date', type: 'date', required: true, default: today() },
     { key: 'job_title', label: 'Job title', required: true, placeholder: 'Software Engineer' },
     { key: 'salary', label: 'Salary', type: 'number', step: '0.01', min: 0 },
@@ -32,6 +32,7 @@ export default function EmployeesSection() {
       key: 'department_id',
       label: 'Department',
       type: 'select',
+      nullable: true,
       options: deptOptions,
       placeholder: deptOptions.length ? 'Select department…' : 'Create a department first',
     },
@@ -47,6 +48,11 @@ export default function EmployeesSection() {
       create={hrApi.createEmployee}
       createLabel="New employee"
       createTitle="New employee"
+      update={(row, payload) => hrApi.updateEmployee(row.id, payload)}
+      updateTitle="Edit employee"
+      remove={(row) => hrApi.deleteEmployee(row.id)}
+      removeLabel="employee"
+      removeHint="Their attendance, leave requests and paychecks will also be deleted."
       emptyHint="Add your first team member to get started."
       columns={[
         {

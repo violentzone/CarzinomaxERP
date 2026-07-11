@@ -401,6 +401,7 @@ textarea.control { resize: vertical; min-height: 68px; }
 .line-amount { text-align: right; font-family: var(--mono); font-weight: 600; color: var(--text-h); font-size: 13px; }
 .line-remove { width: 30px; height: 30px; color: var(--text-dim); }
 .line-remove:hover:not(:disabled) { color: var(--danger); }
+.row-actions { display: inline-flex; gap: 4px; vertical-align: middle; }
 .line-foot {
   display: flex;
   align-items: center;

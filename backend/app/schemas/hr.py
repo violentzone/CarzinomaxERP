@@ -12,6 +12,11 @@ class DepartmentBase(BaseModel):
 class DepartmentCreate(DepartmentBase):
     pass
 
+class DepartmentUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    manager_id: Optional[int] = None
+
 class DepartmentResponse(DepartmentBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -32,6 +37,18 @@ class EmployeeBase(BaseModel):
 class EmployeeCreate(EmployeeBase):
     pass
 
+class EmployeeUpdate(BaseModel):
+    user_id: Optional[int] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    hire_date: Optional[date] = None
+    department_id: Optional[int] = None
+    job_title: Optional[str] = None
+    salary: Optional[Decimal] = None
+    status: Optional[str] = None
+
 class EmployeeResponse(EmployeeBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -45,6 +62,10 @@ class AttendanceLogBase(BaseModel):
 
 class AttendanceLogCreate(AttendanceLogBase):
     pass
+
+class AttendanceLogUpdate(BaseModel):
+    clock_in: Optional[datetime] = None
+    clock_out: Optional[datetime] = None
 
 class AttendanceLogResponse(AttendanceLogBase):
     id: int
@@ -64,6 +85,15 @@ class LeaveRequestBase(BaseModel):
 class LeaveRequestCreate(LeaveRequestBase):
     pass
 
+class LeaveRequestUpdate(BaseModel):
+    employee_id: Optional[int] = None
+    leave_type: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    reason: Optional[str] = None
+    status: Optional[str] = None
+    approved_by_id: Optional[int] = None
+
 class LeaveRequestResponse(LeaveRequestBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -81,6 +111,16 @@ class PaycheckBase(BaseModel):
 
 class PaycheckCreate(PaycheckBase):
     pass
+
+class PaycheckUpdate(BaseModel):
+    employee_id: Optional[int] = None
+    pay_period_start: Optional[date] = None
+    pay_period_end: Optional[date] = None
+    base_salary: Optional[Decimal] = None
+    allowances: Optional[Decimal] = None
+    deductions: Optional[Decimal] = None
+    payment_date: Optional[date] = None
+    status: Optional[str] = None
 
 class PaycheckResponse(PaycheckBase):
     id: int

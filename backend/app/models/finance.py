@@ -1,6 +1,6 @@
 from datetime import date
 from typing import List, Optional
-from sqlalchemy import String, Numeric, Date, ForeignKey, Text, Integer
+from sqlalchemy import String, Numeric, Date, ForeignKey, Text, Integer, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -53,7 +53,8 @@ class Invoice(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, unpaid, paid, cancelled
 
     lines: Mapped[List["InvoiceLine"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
-    payments: Mapped[List["Payment"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
+    # No delete cascade: payments are cash records and survive invoice deletion (invoice_id → NULL)
+    payments: Mapped[List["Payment"]] = relationship(back_populates="invoice")
 
 class InvoiceLine(Base, TimestampMixin):
     __tablename__ = "invoice_lines"
@@ -83,12 +84,28 @@ class FixedAsset(Base, TimestampMixin):
 
 class Payment(Base, TimestampMixin):
     __tablename__ = "payments"
+    __table_args__ = (
+        # Backstop: a category may only carry its own reference field. Presence is
+        # NOT required here (ON DELETE SET NULL must never violate the constraint);
+        # required-ness is enforced at the API layer on create.
+        CheckConstraint(
+            "(invoice_id IS NULL OR category = 'procurement') AND "
+            "(employee_id IS NULL OR category = 'salary') AND "
+            "(contract_number IS NULL OR category = 'rent')",
+            name="ck_payments_category_refs",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    # procurement, salary, rent, utilities, tax, subscription, travel, loan_repayment, other
+    category: Mapped[str] = mapped_column(String(50), nullable=False, default="procurement", index=True)
+    invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True)  # procurement only (optional)
+    # Cross-module FK kept relationship-free so HR deletes never touch finance ORM state
+    employee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)  # salary only
+    contract_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # rent only
     payment_date: Mapped[date] = mapped_column(Date, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     payment_method: Mapped[str] = mapped_column(String(50), nullable=False)  # cash, bank_transfer, credit_card
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # TXN/cheque no., utility account, tax ref, ...
 
-    invoice: Mapped["Invoice"] = relationship(back_populates="payments")
+    invoice: Mapped[Optional["Invoice"]] = relationship(back_populates="payments")

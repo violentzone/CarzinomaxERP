@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Scale } from 'lucide-react'
+import { Scale, Pencil, Trash2, X } from 'lucide-react'
 import { financeApi } from '../../api/finance'
 import { useList } from '../../lib/useList'
 import { useToast } from '../../context/ToastContext'
@@ -7,6 +7,7 @@ import { num, currency, date as fmtDate, today, titleize } from '../../lib/forma
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import AccessDenied from '../../components/ui/AccessDenied'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import SessionList from '../../components/ui/SessionList'
 import Badge from '../../components/ui/Badge'
 import { SchemaForm } from '../../components/SchemaForm'
@@ -23,6 +24,9 @@ export default function JournalSection() {
   const [lines, setLines] = useState([blankLine(), blankLine()])
   const [created, setCreated] = useState([])
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState(null) // entry being edited, null = create
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
   if (denied) return <AccessDenied module="Finance" />
 
@@ -32,6 +36,12 @@ export default function JournalSection() {
   const balanced = totalDebit === totalCredit && totalDebit > 0
   const allAccounts = lines.every((l) => l.gl_account_id)
 
+  const resetForm = () => {
+    setEditingId(null)
+    setHeader({ entry_date: today(), status: 'draft', description: '' })
+    setLines([blankLine(), blankLine()])
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     if (!balanced) {
@@ -40,20 +50,58 @@ export default function JournalSection() {
     }
     setSaving(true)
     try {
-      const entry = await financeApi.createJournalEntry({
+      const payload = {
         entry_date: header.entry_date,
         description: header.description,
         status: header.status || 'draft',
         lines: lines.map((l) => ({ gl_account_id: num(l.gl_account_id), debit: num(l.debit), credit: num(l.credit) })),
-      })
-      setCreated((c) => [{ ...entry, _debit: totalDebit }, ...c])
-      toast.success('Journal entry posted')
-      setHeader({ entry_date: today(), status: 'draft', description: '' })
-      setLines([blankLine(), blankLine()])
+      }
+      if (editingId) {
+        const entry = await financeApi.updateJournalEntry(editingId, payload)
+        setCreated((c) => c.map((r) => (r.id === editingId ? { ...entry, _debit: totalDebit } : r)))
+        toast.success('Journal entry updated')
+      } else {
+        const entry = await financeApi.createJournalEntry(payload)
+        setCreated((c) => [{ ...entry, _debit: totalDebit }, ...c])
+        toast.success('Journal entry posted')
+      }
+      resetForm()
     } catch (err) {
-      toast.error(err?.detail || 'Could not create journal entry')
+      toast.error(err?.detail || (editingId ? 'Could not update journal entry' : 'Could not create journal entry'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startEdit = (row) => {
+    setEditingId(row.id)
+    setHeader({
+      entry_date: row.entry_date,
+      description: row.description || '',
+      status: row.status || 'draft',
+    })
+    setLines(
+      (row.lines || []).map((l) => ({
+        _key: ++seq,
+        gl_account_id: String(l.gl_account_id),
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    )
+  }
+
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await financeApi.deleteJournalEntry(pendingRemove.id)
+      setCreated((c) => c.filter((r) => r.id !== pendingRemove.id))
+      if (pendingRemove.id === editingId) resetForm()
+      toast.success('Journal entry deleted')
+      setPendingRemove(null)
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete journal entry')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -61,9 +109,14 @@ export default function JournalSection() {
     <div>
       <div className="section-toolbar">
         <div>
-          <h2>New journal entry</h2>
+          <h2>{editingId ? `Edit journal entry #${editingId}` : 'New journal entry'}</h2>
           <div className="muted">Double-entry — total debits must equal total credits.</div>
         </div>
+        {editingId && (
+          <Button variant="outline" icon={X} onClick={resetForm}>
+            Cancel edit
+          </Button>
+        )}
       </div>
 
       <Card className="card-pad">
@@ -100,8 +153,8 @@ export default function JournalSection() {
           />
 
           <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" icon={Scale} loading={saving} disabled={!balanced || !allAccounts}>
-              Post entry
+            <Button type="submit" icon={editingId ? Pencil : Scale} loading={saving} disabled={!balanced || !allAccounts}>
+              {editingId ? 'Save changes' : 'Post entry'}
             </Button>
           </div>
         </form>
@@ -117,7 +170,41 @@ export default function JournalSection() {
           { key: 'lines', header: 'Lines', align: 'right', render: (r) => r.lines?.length ?? '—' },
           { key: '_debit', header: 'Amount', align: 'right', render: (r) => <span className="cell-num">{currency(r._debit)}</span> },
           { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            render: (r) => (
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => startEdit(r)}
+                  aria-label="Edit journal entry"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn line-remove"
+                  onClick={() => setPendingRemove(r)}
+                  aria-label="Delete journal entry"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </span>
+            ),
+          },
         ]}
+      />
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={removing}
+        title="Delete journal entry"
+        message="This will permanently delete this journal entry and its lines."
       />
     </div>
   )

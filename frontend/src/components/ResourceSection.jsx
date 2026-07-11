@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Plus, AlertCircle } from 'lucide-react'
+import { Plus, AlertCircle, Pencil, Trash2 } from 'lucide-react'
 import { useList } from '../lib/useList'
 import { useToast } from '../context/ToastContext'
 import Table from './ui/Table'
 import Button from './ui/Button'
 import Modal from './ui/Modal'
+import ConfirmDialog from './ui/ConfirmDialog'
 import AccessDenied from './ui/AccessDenied'
-import { SchemaForm, initialValues, buildPayload } from './SchemaForm'
+import { SchemaForm, initialValues, editValues, buildPayload } from './SchemaForm'
 
 /**
  * Generic "list + create" section for the straightforward CRUD resources
@@ -19,8 +20,14 @@ import { SchemaForm, initialValues, buildPayload } from './SchemaForm'
  *  - deps: [] for the fetcher
  *  - columns: <Table> columns
  *  - create: (payload) => created (optional; omit for read-only lists)
- *  - fields: SchemaForm schema for the create modal
+ *  - fields: SchemaForm schema for the create/edit modal
  *  - createLabel, createTitle
+ *  - update: (row, payload) => promise (optional; adds a per-row edit action
+ *    reusing `fields` prefilled from the row)
+ *  - updateTitle: edit modal title ("Edit department", …)
+ *  - remove: (row) => promise    (optional; adds a per-row delete action)
+ *  - removeLabel: noun used in the delete confirmation ("department", …)
+ *  - removeHint: extra consequence line shown in the delete confirmation
  *  - emptyHint
  *  - toolbarExtra: node rendered on the left of the toolbar (e.g. filters)
  *  - onExternalRows / rowsTransform: optional transform of fetched rows
@@ -36,6 +43,11 @@ export default function ResourceSection({
   fields = [],
   createLabel = 'New',
   createTitle,
+  update,
+  updateTitle = 'Edit',
+  remove,
+  removeLabel = 'record',
+  removeHint,
   emptyHint,
   emptyIcon,
   toolbarExtra,
@@ -44,13 +56,23 @@ export default function ResourceSection({
   const toast = useToast()
   const { rows, loading, error, denied, reload } = useList(fetcher, deps)
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(null) // row being edited, null = create
   const [values, setValues] = useState(() => initialValues(fields))
   const [saving, setSaving] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
   if (denied) return <AccessDenied module={moduleName} />
 
   const openModal = () => {
+    setEditing(null)
     setValues(initialValues(fields))
+    setOpen(true)
+  }
+
+  const openEdit = (row) => {
+    setEditing(row)
+    setValues(editValues(fields, row))
     setOpen(true)
   }
 
@@ -58,8 +80,13 @@ export default function ResourceSection({
     e.preventDefault()
     setSaving(true)
     try {
-      await create(buildPayload(fields, values))
-      toast.success(`${createTitle || createLabel} saved`)
+      if (editing) {
+        await update(editing, buildPayload(fields, values, { clearNullable: true }))
+        toast.success(`${updateTitle} saved`)
+      } else {
+        await create(buildPayload(fields, values))
+        toast.success(`${createTitle || createLabel} saved`)
+      }
       setOpen(false)
       reload()
     } catch (err) {
@@ -69,7 +96,57 @@ export default function ResourceSection({
     }
   }
 
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await remove(pendingRemove)
+      toast.success(`${removeLabel[0].toUpperCase()}${removeLabel.slice(1)} deleted`)
+      setPendingRemove(null)
+      reload()
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   const displayRows = rowsTransform ? rowsTransform(rows) : rows
+
+  const tableColumns = update || remove
+    ? [
+        ...columns,
+        {
+          key: 'actions',
+          header: '',
+          align: 'right',
+          width: update && remove ? 80 : 44,
+          render: (r) => (
+            <span className="row-actions">
+              {update && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => openEdit(r)}
+                  aria-label={`Edit ${removeLabel}`}
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
+              {remove && (
+                <button
+                  type="button"
+                  className="icon-btn line-remove"
+                  onClick={() => setPendingRemove(r)}
+                  aria-label={`Delete ${removeLabel}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </span>
+          ),
+        },
+      ]
+    : columns
 
   return (
     <div>
@@ -101,7 +178,7 @@ export default function ResourceSection({
         </div>
       ) : (
         <Table
-          columns={columns}
+          columns={tableColumns}
           rows={displayRows}
           loading={loading}
           empty={{
@@ -117,11 +194,11 @@ export default function ResourceSection({
         />
       )}
 
-      {create && (
+      {(create || update) && (
         <Modal
           open={open}
           onClose={() => setOpen(false)}
-          title={createTitle || createLabel}
+          title={editing ? updateTitle : createTitle || createLabel}
           footer={
             <>
               <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -137,6 +214,18 @@ export default function ResourceSection({
             <SchemaForm fields={fields} values={values} setField={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
           </form>
         </Modal>
+      )}
+
+      {remove && (
+        <ConfirmDialog
+          open={!!pendingRemove}
+          onClose={() => setPendingRemove(null)}
+          onConfirm={confirmRemove}
+          loading={removing}
+          title={`Delete ${removeLabel}`}
+          message={`This will permanently delete this ${removeLabel}.`}
+          hint={removeHint}
+        />
       )}
     </div>
   )

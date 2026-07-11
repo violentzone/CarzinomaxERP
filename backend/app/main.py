@@ -3,14 +3,38 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
+from sqlalchemy import inspect
 from sqlalchemy.future import select
 
 from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
+from app.core.database import engine, SessionLocal
 from app.core.security import get_password_hash
 from app.models.auth import User
 from app.api.v1 import api_router
 from app.core.log_module import system_log, user_log
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+
+def _run_migrations(connection) -> None:
+    """Bring the database schema to the latest Alembic revision.
+
+    Databases created by the old create_all flow (tables exist but no
+    alembic_version) are stamped at the 0001 baseline first, so only the
+    later revisions run against them.
+
+    Args:
+        connection: A synchronous-facing SQLAlchemy connection (from run_sync).
+    """
+    cfg = AlembicConfig(str(BACKEND_DIR / "alembic.ini"))
+    cfg.attributes["connection"] = connection
+    inspector = inspect(connection)
+    if not inspector.has_table("alembic_version") and inspector.has_table("users"):
+        alembic_command.stamp(cfg, "0001")
+    alembic_command.upgrade(cfg, "head")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,10 +66,12 @@ async def lifespan(app: FastAPI):
         f"<yellow>API {settings.API_V1_STR}</yellow>  |  <magenta>Ready</magenta>"
     )
 
-    # Create database tables if they do not exist
+    # Apply Alembic migrations (creates the schema on a fresh database and
+    # upgrades existing ones; see backend/migration/)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        
+        await conn.run_sync(_run_migrations)
+
+
     # Seed default admin user
     async with SessionLocal() as session:
         result = await session.execute(select(User).filter(User.email == settings.ADMIN_EMAIL))
