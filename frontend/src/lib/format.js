@@ -13,6 +13,8 @@ export function num(v) {
 const money = new Intl.NumberFormat(undefined, {
   style: 'currency',
   currency: 'USD',
+  // plain "$" — without this, non-US locales render "US$"
+  currencyDisplay: 'narrowSymbol',
   maximumFractionDigits: 2,
 })
 
@@ -26,6 +28,7 @@ export function compactCurrency(v) {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency: 'USD',
+      currencyDisplay: 'narrowSymbol',
       notation: 'compact',
       maximumFractionDigits: 1,
     }).format(n)

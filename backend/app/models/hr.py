@@ -12,21 +12,13 @@ class Department(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    manager_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
-
-    employees: Mapped[List["Employee"]] = relationship(
-        "Employee", 
-        back_populates="department",
-        foreign_keys="[Employee.department_id]"
-    )
+    manager_id: Mapped[Optional[int]] = mapped_column(Numeric, nullable=True)
 
 class Employee(Base, TimestampMixin):
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -35,21 +27,6 @@ class Employee(Base, TimestampMixin):
     salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)  # active, terminated, on_leave
 
-    department: Mapped[Optional["Department"]] = relationship(
-        "Department",
-        back_populates="employees",
-        foreign_keys=[department_id]
-    )
-    
-    attendance: Mapped[List["AttendanceLog"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
-    leave_requests: Mapped[List["LeaveRequest"]] = relationship(
-        "LeaveRequest",
-        back_populates="employee",
-        foreign_keys="[LeaveRequest.employee_id]",
-        cascade="all, delete-orphan"
-    )
-    paychecks: Mapped[List["Paycheck"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
-    onboarding_tasks: Mapped[List["OnboardingChecklist"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
 
 class AttendanceLog(Base, TimestampMixin):
     __tablename__ = "attendance_logs"
@@ -61,7 +38,6 @@ class AttendanceLog(Base, TimestampMixin):
     clock_out: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     total_hours: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
 
-    employee: Mapped["Employee"] = relationship(back_populates="attendance")
 
 class LeaveRequest(Base, TimestampMixin):
     __tablename__ = "leave_requests"
@@ -75,7 +51,7 @@ class LeaveRequest(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, approved, rejected
     approved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
-    employee: Mapped["Employee"] = relationship("Employee", foreign_keys=[employee_id], back_populates="leave_requests")
+    employee: Mapped["Employee"] = relationship("Employee", foreign_keys=[employee_id])
     approver: Mapped[Optional["Employee"]] = relationship("Employee", foreign_keys=[approved_by_id])
 
 class Paycheck(Base, TimestampMixin):
@@ -89,10 +65,10 @@ class Paycheck(Base, TimestampMixin):
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    payment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    payment_date: Mapped[int] = mapped_column(Numeric, nullable=False, doc='Pay day in a month')
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, paid
 
-    employee: Mapped["Employee"] = relationship(back_populates="paychecks")
+    employee: Mapped["Employee"] = relationship()
 
 class JobPosting(Base, TimestampMixin):
     __tablename__ = "job_postings"
@@ -102,40 +78,3 @@ class JobPosting(Base, TimestampMixin):
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, open, closed
-
-    applications: Mapped[List["Application"]] = relationship(back_populates="job_posting", cascade="all, delete-orphan")
-
-class Candidate(Base, TimestampMixin):
-    __tablename__ = "candidates"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    resume_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-
-    applications: Mapped[List["Application"]] = relationship(back_populates="candidate", cascade="all, delete-orphan")
-
-class Application(Base, TimestampMixin):
-    __tablename__ = "applications"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    job_posting_id: Mapped[int] = mapped_column(ForeignKey("job_postings.id", ondelete="CASCADE"), nullable=False)
-    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
-    application_date: Mapped[date] = mapped_column(Date, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="applied", nullable=False)  # applied, screening, interview, offered, hired, rejected
-
-    job_posting: Mapped["JobPosting"] = relationship(back_populates="applications")
-    candidate: Mapped["Candidate"] = relationship(back_populates="applications")
-
-class OnboardingChecklist(Base, TimestampMixin):
-    __tablename__ = "onboarding_checklists"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
-    task_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    employee: Mapped["Employee"] = relationship(back_populates="onboarding_tasks")
