@@ -1,5 +1,5 @@
 from datetime import date, datetime, timezone
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,19 +9,14 @@ from decimal import Decimal
 
 from app.api.deps import get_db, RoleChecker
 from app.models.hr import (
-    Department, Employee, AttendanceLog, LeaveRequest, Paycheck,
-    JobPosting, Candidate, Application, OnboardingChecklist
+    Department, Employee, AttendanceLog, LeaveRequest, Paycheck
 )
 from app.schemas.hr import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
-    AttendanceLogCreate, AttendanceLogUpdate, AttendanceLogResponse,
+    AttendanceLogUpdate, AttendanceLogResponse,
     LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestResponse,
-    PaycheckCreate, PaycheckUpdate, PaycheckResponse,
-    JobPostingCreate, JobPostingResponse,
-    CandidateCreate, CandidateResponse,
-    ApplicationCreate, ApplicationResponse,
-    OnboardingChecklistCreate, OnboardingChecklistResponse
+    PaycheckCreate, PaycheckUpdate, PaycheckResponse
 )
 
 router = APIRouter(dependencies=[Depends(RoleChecker(["hr", "admin"]))])
@@ -133,15 +128,6 @@ async def delete_department(
     dept = result.scalar_one_or_none()
     if not dept:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found.")
-
-    posting_res = await db.execute(
-        select(JobPosting.id).filter(JobPosting.department_id == department_id).limit(1)
-    )
-    if posting_res.first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Department has job postings and cannot be deleted."
-        )
 
     await db.delete(dept)
     await db.commit()
@@ -276,7 +262,6 @@ async def delete_employee(
             selectinload(Employee.attendance),
             selectinload(Employee.leave_requests),
             selectinload(Employee.paychecks),
-            selectinload(Employee.onboarding_tasks),
         )
         .filter(Employee.id == employee_id)
     )

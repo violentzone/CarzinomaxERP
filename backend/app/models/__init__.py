@@ -28,7 +28,6 @@ from app.models.hr import (
     AttendanceLog,
     LeaveRequest,
     Paycheck,
-    JobPosting,
 )
 from app.models.dev_tracking import (
     DevInvestment,
@@ -63,7 +62,6 @@ __all__ = [
     "AttendanceLog",
     "LeaveRequest",
     "Paycheck",
-    "JobPosting",
     "DevInvestment",
     "DevWorkerPaycheck",
     "ProjectDownload",

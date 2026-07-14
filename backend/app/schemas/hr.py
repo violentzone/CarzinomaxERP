@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from decimal import Decimal
 
@@ -127,59 +127,6 @@ class PaycheckResponse(PaycheckBase):
     net_pay: Decimal
     model_config = ConfigDict(from_attributes=True)
 
-# Job Posting
-class JobPostingBase(BaseModel):
-    title: str
-    department_id: int
-    description: str
-    status: str = "draft"
 
-class JobPostingCreate(JobPostingBase):
-    pass
 
-class JobPostingResponse(JobPostingBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
 
-# Candidate
-class CandidateBase(BaseModel):
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    resume_url: Optional[str] = None
-
-class CandidateCreate(CandidateBase):
-    pass
-
-class CandidateResponse(CandidateBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-# Application
-class ApplicationBase(BaseModel):
-    job_posting_id: int
-    candidate_id: int
-    application_date: date
-    status: str = "applied"
-
-class ApplicationCreate(ApplicationBase):
-    pass
-
-class ApplicationResponse(ApplicationBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-# Onboarding Checklist
-class OnboardingChecklistBase(BaseModel):
-    employee_id: int
-    task_name: str
-    is_completed: bool = False
-    completed_at: Optional[datetime] = None
-
-class OnboardingChecklistCreate(OnboardingChecklistBase):
-    pass
-
-class OnboardingChecklistResponse(OnboardingChecklistBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)

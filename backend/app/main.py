@@ -13,7 +13,7 @@ from app.core.database import engine, SessionLocal
 from app.core.security import get_password_hash
 from app.models.auth import User
 from app.api.v1 import api_router
-from app.core.log_module import system_log, user_log
+from app.core.log_module import system_log
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

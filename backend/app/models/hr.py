@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import List, Optional
-from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,18 +14,26 @@ class Department(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     manager_id: Mapped[Optional[int]] = mapped_column(Numeric, nullable=True)
 
+    employees: Mapped[List["Employee"]] = relationship("Employee", back_populates="department")
+
 class Employee(Base, TimestampMixin):
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
-    job_title: Mapped[str] = mapped_column(String(100), nullable=False)
+    job_title: Mapped[str] = mapped_column(String(100), nullable=True)
     salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)  # active, terminated, on_leave
+
+    department: Mapped[Optional["Department"]] = relationship("Department", back_populates="employees")
+    attendance: Mapped[List["AttendanceLog"]] = relationship("AttendanceLog", back_populates="employee", cascade="all, delete-orphan")
+    leave_requests: Mapped[List["LeaveRequest"]] = relationship("LeaveRequest", foreign_keys="[LeaveRequest.employee_id]", back_populates="employee", cascade="all, delete-orphan")
+    approved_leaves: Mapped[List["LeaveRequest"]] = relationship("LeaveRequest", foreign_keys="[LeaveRequest.approved_by_id]", back_populates="approver")
+    paychecks: Mapped[List["Paycheck"]] = relationship("Paycheck", back_populates="employee", cascade="all, delete-orphan")
 
 
 class AttendanceLog(Base, TimestampMixin):
@@ -37,6 +45,8 @@ class AttendanceLog(Base, TimestampMixin):
     clock_in: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     clock_out: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     total_hours: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
+
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="attendance")
 
 
 class LeaveRequest(Base, TimestampMixin):
@@ -51,8 +61,8 @@ class LeaveRequest(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, approved, rejected
     approved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
-    employee: Mapped["Employee"] = relationship("Employee", foreign_keys=[employee_id])
-    approver: Mapped[Optional["Employee"]] = relationship("Employee", foreign_keys=[approved_by_id])
+    employee: Mapped["Employee"] = relationship("Employee", foreign_keys=[employee_id], back_populates="leave_requests")
+    approver: Mapped[Optional["Employee"]] = relationship("Employee", foreign_keys=[approved_by_id], back_populates="approved_leaves")
 
 class Paycheck(Base, TimestampMixin):
     __tablename__ = "paychecks"
@@ -68,13 +78,4 @@ class Paycheck(Base, TimestampMixin):
     payment_date: Mapped[int] = mapped_column(Numeric, nullable=False, doc='Pay day in a month')
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, paid
 
-    employee: Mapped["Employee"] = relationship()
-
-class JobPosting(Base, TimestampMixin):
-    __tablename__ = "job_postings"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, open, closed
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="paychecks")
