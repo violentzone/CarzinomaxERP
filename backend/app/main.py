@@ -14,6 +14,7 @@ from app.core.security import get_password_hash
 from app.models.auth import User
 from app.api.v1 import api_router
 from app.core.log_module import system_log
+from app.core.scheduler import start_scheduler, shutdown_scheduler
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -88,8 +89,13 @@ async def lifespan(app: FastAPI):
             session.add(admin_user)
             await session.commit()
             system_log().info(f"Default admin user created ({settings.ADMIN_EMAIL})")
+
+    # Start background scheduler
+    start_scheduler()
             
     yield
+    # Shutdown background scheduler
+    shutdown_scheduler()
     shutdown_log = system_log()
     shutdown_log.info("INFO: System Stopping...")
 
