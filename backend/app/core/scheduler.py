@@ -11,7 +11,7 @@ from app.models.finance import Payment
 scheduler = AsyncIOScheduler()
 
 async def process_monthly_salary_payments():
-    """Calculate salaries for all active employees and create payments in the finance module."""
+    """Calculate total salary for all active employees and create a single payment in the finance module."""
     log = system_log()
     log.info("Scheduler: Starting monthly salary payment execution...")
 
@@ -23,40 +23,44 @@ async def process_monthly_salary_payments():
             )
             employees = result.scalars().all()
 
+            if not employees:
+                log.info("Scheduler: No active employees found. No salary payment processed.")
+                return
+
             today = date.today()
             payment_ref = f"Monthly Salary - {today.strftime('%B %Y')}"
-            payments_created = 0
 
-            for emp in employees:
-                # 2. Check for duplicate payments for this employee on this date
-                dup_check = await session.execute(
-                    select(Payment).filter(
-                        Payment.employee_id == emp.id,
-                        Payment.category == "salary",
-                        Payment.payment_date == today
-                    )
+            # 2. Check for duplicate payment for this month (employee_id is None, category is salary, date is today)
+            dup_check = await session.execute(
+                select(Payment).filter(
+                    Payment.employee_id.is_(None),
+                    Payment.category == "salary",
+                    Payment.payment_date == today
                 )
-                if dup_check.scalar_one_or_none():
-                    log.warning(f"Scheduler: Salary payment already exists for employee ID {emp.id} on {today}. Skipping.")
-                    continue
+            )
+            if dup_check.scalar_one_or_none():
+                log.warning(f"Scheduler: Monthly salary payment already exists for {today}. Skipping.")
+                return
 
-                # 3. Create the payment record
-                payment = Payment(
-                    category="salary",
-                    employee_id=emp.id,
-                    payment_date=today,
-                    amount=emp.salary,
-                    payment_method="bank_transfer",
-                    reference=payment_ref
-                )
-                session.add(payment)
-                payments_created += 1
+            # 3. Sum up all active employee salaries
+            total_salary = sum(emp.salary for emp in employees)
 
-            if payments_created > 0:
-                await session.commit()
-                log.info(f"Scheduler: Successfully processed {payments_created} salary payments.")
-            else:
-                log.info("Scheduler: No new salary payments processed.")
+            if total_salary <= 0:
+                log.info("Scheduler: Total active employee salary is 0. No payment processed.")
+                return
+
+            # 4. Create the single payment record
+            payment = Payment(
+                category="salary",
+                employee_id=None,
+                payment_date=today,
+                amount=total_salary,
+                payment_method="bank_transfer",
+                reference=payment_ref
+            )
+            session.add(payment)
+            await session.commit()
+            log.info(f"Scheduler: Successfully processed monthly salary payment of {total_salary} for all active employees.")
 
         except Exception as e:
             await session.rollback()
