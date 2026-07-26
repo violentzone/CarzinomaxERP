@@ -4,6 +4,7 @@ from sqlalchemy.future import select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.log_module import system_log
 from app.models.hr import Employee, LeaveRequest, Paycheck
@@ -126,15 +127,15 @@ async def process_monthly_salary_payments():
 def start_scheduler():
     """Initialize and start the scheduler."""
     log = system_log()
-    # Schedule the job for the 1st of every month at midnight
+    # Schedule the job using the configured timespot
     scheduler.add_job(
         process_monthly_salary_payments,
-        trigger=CronTrigger(day=1, hour=0, minute=0),
+        trigger=CronTrigger.from_crontab(settings.PAYCHECK_CALCULATE_TIMESPOT),
         id="monthly_salary_payments",
         replace_existing=True
     )
     scheduler.start()
-    log.info("Scheduler: Initialized and started (cron: 1st of month at midnight).")
+    log.info(f"Scheduler: Initialized and started (cron: {settings.PAYCHECK_CALCULATE_TIMESPOT}).")
 
 def shutdown_scheduler():
     """Shutdown the scheduler."""

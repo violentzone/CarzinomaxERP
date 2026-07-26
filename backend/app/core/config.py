@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     ADMIN_DB_CONNECTION: Optional[str] = None
     
+    # Payroll/Paycheck calculation timespot (cron expression)
+    PAYCHECK_CALCULATE_TIMESPOT: str = "0 0 1 * *"
+    
     # Async database URL computed automatically
     ASYNC_DATABASE_URL: str = ""
 
