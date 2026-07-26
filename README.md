@@ -59,7 +59,8 @@ The accounting engine underneath the AI is real and running:
 | **Invoicing (AR/AP)** | ✅ Working | Customer/vendor invoices with line items + tax calculation |
 | **Payments** | ✅ Working | Record payments; invoice status auto-updates (paid / partial) |
 | **Fixed Assets** | ✅ Working | Asset registry (depreciation on the roadmap) |
-| **SCM / HR / Dev-tracking** | 🚧 Scaffolded | Models + endpoints exist, being fleshed out |
+| **SCM / Dev-tracking** | 🚧 Scaffolded | Models + endpoints exist, being fleshed out |
+| **HR & Payroll** | ✅ Working | Employee directory, leave requests, automated payroll with leave deductions (unpaid/half-salary sick leaves) |
 | **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point |
 | **React frontend** | 🔜 Planned | API-first today; UI is next |
 
@@ -83,7 +84,7 @@ cd CarzinomaxERP/backend
 
 # 2. Configure — copy the example and fill in your values
 cp .env.example .env
-#   set SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL
+#   set SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, PAYCHECK_CALCULATE_TIMESPOT
 
 # 3. Install dependencies
 uv sync
