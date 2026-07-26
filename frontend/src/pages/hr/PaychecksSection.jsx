@@ -48,6 +48,19 @@ export default function PaychecksSection() {
     { key: 'status', label: 'Status', type: 'select', options: STATUSES, default: 'draft' },
   ]
 
+  const handleSetField = (k, v) => {
+    setValues((s) => {
+      const next = { ...s, [k]: v }
+      if (k === 'employee_id' && v) {
+        const selectedEmp = (employees || []).find((e) => String(e.id) === String(v))
+        if (selectedEmp && selectedEmp.salary) {
+          next.base_salary = selectedEmp.salary
+        }
+      }
+      return next
+    })
+  }
+
   const resetForm = () => {
     setEditingId(null)
     setValues({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
@@ -129,7 +142,7 @@ export default function PaychecksSection() {
 
       <Card className="card-pad" style={{ maxWidth: 640 }}>
         <form onSubmit={submit} className="col gap-4">
-          <SchemaForm fields={fields} values={values} setField={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
+          <SchemaForm fields={fields} values={values} setField={handleSetField} />
 
           <div
             style={{
