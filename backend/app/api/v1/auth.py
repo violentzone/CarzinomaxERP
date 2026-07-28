@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.api.deps import get_current_active_user, RoleChecker
 from app.models.auth import User
-from app.schemas.auth import Token, UserCreate, UserResponse
+from app.schemas.auth import Token, UserCreate, UserResponse, UserUpdate
 
 router = APIRouter()
 
@@ -94,11 +94,17 @@ async def register_user(
         full_name=user_in.full_name,
         role=user_in.role,
         is_active=True,
+        has_finance_access=user_in.has_finance_access,
+        has_scm_access=user_in.has_scm_access,
+        has_hr_access=user_in.has_hr_access,
+        has_dev_access=user_in.has_dev_access,
     )
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
     return db_user
+
+from typing import List
 
 @router.get("/me", response_model=UserResponse)
 async def read_user_me(
@@ -113,3 +119,48 @@ async def read_user_me(
         Any: The current user details.
     """
     return current_user
+
+@router.get(
+    "/users",
+    response_model=List[UserResponse],
+    dependencies=[Depends(RoleChecker(["admin"]))],
+)
+async def list_users(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Retrieve all users in the system (admin only)."""
+    result = await db.execute(select(User).order_by(User.id.desc()))
+    return result.scalars().all()
+
+@router.put(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(RoleChecker(["admin"]))],
+)
+async def update_user(
+    user_id: int,
+    user_in: UserUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Update a user's details/permissions (admin only)."""
+    result = await db.execute(select(User).filter(User.id == user_id))
+    db_user = result.scalar_one_or_none()
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Update fields if provided
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "password" in update_data and update_data["password"]:
+        db_user.hashed_password = security.get_password_hash(update_data["password"])
+        del update_data["password"]
+        
+    for field, value in update_data.items():
+        setattr(db_user, field, value)
+        
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user

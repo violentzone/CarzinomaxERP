@@ -22,3 +22,7 @@ class User(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(50), default=UserRole.EMPLOYEE.value, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    has_finance_access: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_scm_access: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_hr_access: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_dev_access: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

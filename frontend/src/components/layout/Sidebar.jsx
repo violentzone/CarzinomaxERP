@@ -7,7 +7,7 @@ import { navForRole, ROLE_LABELS } from '../../lib/roles'
 /** Left navigation. Items are filtered by the current user's role. */
 export default function Sidebar({ open, onNavigate }) {
   const { user, logout } = useAuth()
-  const items = navForRole(user?.role)
+  const items = navForRole(user)
   const initials = (user?.full_name || user?.email || '?')
     .split(/[\s@.]+/)
     .filter(Boolean)

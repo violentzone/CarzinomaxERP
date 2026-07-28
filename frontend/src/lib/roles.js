@@ -19,18 +19,26 @@ export const NAV_ITEMS = [
   { key: 'scm', label: 'Supply Chain', path: '/scm', icon: Boxes, roles: ['scm'] },
   { key: 'hr', label: 'People', path: '/hr', icon: Users, roles: ['hr'] },
   { key: 'dev', label: 'Dev Tracking', path: '/dev-tracking', icon: LineChart, roles: ['developer'] },
-  { key: 'users', label: 'Users', path: '/admin/users', icon: ShieldCheck, roles: [] }, // admin-only
+  { key: 'users', label: 'Users', path: '/admin/users', icon: ShieldCheck, roles: ['admin'] }, // admin-only
 ]
 
-/** Does `role` satisfy an item's `roles` requirement? admin always passes. */
-export function canAccess(role, requiredRoles) {
-  if (role === 'admin') return true
+/** Does `user` satisfy an item's `roles` requirement? admin always passes. */
+export function canAccess(user, requiredRoles) {
+  if (!user) return false
   if (requiredRoles === null) return true // open to all authenticated users
-  return requiredRoles.includes(role)
+  
+  for (const role of requiredRoles) {
+    if (role === 'finance' && user.has_finance_access) return true
+    if (role === 'scm' && user.has_scm_access) return true
+    if (role === 'hr' && user.has_hr_access) return true
+    if (role === 'developer' && user.has_dev_access) return true
+    if (user.role === role) return true
+  }
+  return false
 }
 
-export function navForRole(role) {
-  return NAV_ITEMS.filter((item) => canAccess(role, item.roles))
+export function navForRole(user) {
+  return NAV_ITEMS.filter((item) => canAccess(user, item.roles))
 }
 
 export const ROLE_LABELS = {

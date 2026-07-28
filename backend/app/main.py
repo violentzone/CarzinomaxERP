@@ -84,7 +84,11 @@ async def lifespan(app: FastAPI):
                 hashed_password=hashed_pwd,
                 full_name="System Administrator",
                 role="admin",
-                is_active=True
+                is_active=True,
+                has_finance_access=True,
+                has_scm_access=True,
+                has_hr_access=True,
+                has_dev_access=True,
             )
             session.add(admin_user)
             await session.commit()

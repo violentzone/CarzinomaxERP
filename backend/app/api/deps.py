@@ -107,7 +107,20 @@ class RoleChecker:
         Raises:
             HTTPException: If the user is not an admin and does not have any allowed role.
         """
-        if current_user.role not in self.allowed_roles and current_user.role != "admin":
+        has_access = False
+        for r in self.allowed_roles:
+            if r == "finance" and getattr(current_user, "has_finance_access", False):
+                has_access = True
+            elif r == "scm" and getattr(current_user, "has_scm_access", False):
+                has_access = True
+            elif r == "hr" and getattr(current_user, "has_hr_access", False):
+                has_access = True
+            elif r == "developer" and getattr(current_user, "has_dev_access", False):
+                has_access = True
+            elif r == current_user.role:
+                has_access = True
+
+        if not has_access:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="The user doesn't have enough privileges",
