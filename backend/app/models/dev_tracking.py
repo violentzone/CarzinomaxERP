@@ -16,15 +16,6 @@ class DevInvestment(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-class DevWorkerPaycheck(Base, TimestampMixin):
-    __tablename__ = "dev_worker_paychecks"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    worker_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(100), nullable=False)  # Frontend Dev, Backend Dev, DevOps, AI Engineer
-    payment_date: Mapped[date] = mapped_column(Date, nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 class ProjectDownload(Base, TimestampMixin):
     __tablename__ = "dev_project_downloads"
