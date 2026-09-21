@@ -17,7 +17,7 @@ from app.core.log_module import system_log, user_log
 from app.core.security import create_access_token
 from app.models import User
 
-auth_router = APIRouter()
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 @auth_router.post("/login")
 async def login(user_email: str, password: str, db=Depends(get_db)):
@@ -65,3 +65,4 @@ async def logout(
     current_user.tokens_valid_from = datetime.now(timezone.utc)
     await db.commit()
     user_log(current_user.id).info("Logged out; access tokens issued before now are revoked")
+
