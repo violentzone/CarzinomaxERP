@@ -66,3 +66,9 @@ async def logout(
     await db.commit()
     user_log(current_user.id).info("Logged out; access tokens issued before now are revoked")
 
+@auth_router.get("/me")
+async def me():
+    """
+    Get current user
+    """
+    return get_current_user()
