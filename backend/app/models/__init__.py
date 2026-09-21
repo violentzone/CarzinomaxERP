@@ -1,15 +1,7 @@
 from app.core.database import Base
 from app.models.base import TimestampMixin
 from app.models.auth import User, UserRole
-from app.models.finance import (
-    GLAccount,
-    JournalEntry,
-    JournalLine,
-    Invoice,
-    InvoiceLine,
-    FixedAsset,
-    Payment,
-)
+from app.models.finance import ExpenseType, Finance
 from app.models.scm import (
     ProductCategory,
     Product,
@@ -31,7 +23,6 @@ from app.models.hr import (
 )
 from app.models.dev_tracking import (
     DevInvestment,
-    DevWorkerPaycheck,
     ProjectDownload,
 )
 
@@ -40,13 +31,8 @@ __all__ = [
     "TimestampMixin",
     "User",
     "UserRole",
-    "GLAccount",
-    "JournalEntry",
-    "JournalLine",
-    "Invoice",
-    "InvoiceLine",
-    "FixedAsset",
-    "Payment",
+    "ExpenseType",
+    "Finance",
     "ProductCategory",
     "Product",
     "Warehouse",
@@ -63,6 +49,5 @@ __all__ = [
     "LeaveRequest",
     "Paycheck",
     "DevInvestment",
-    "DevWorkerPaycheck",
     "ProjectDownload",
 ]
