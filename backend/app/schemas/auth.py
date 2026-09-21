@@ -7,6 +7,7 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
+    iat: float
 
 class UserBase(BaseModel):
     email: Optional[EmailStr] = None
