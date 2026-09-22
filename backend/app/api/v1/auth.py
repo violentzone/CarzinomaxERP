@@ -68,7 +68,7 @@ async def logout(
     user_log(current_user.id).info("Logged out; access tokens issued before now are revoked")
 
 @auth_router.get("/me")
-async def me(current_user: User = Depends(get_current_user)) -> User:
+async def me(current_user: User = Depends(get_current_user)):
     """
     Get current user
     Args:
