@@ -51,3 +51,6 @@ async def get_current_user(
     if cutoff is not None and payload.iat < cutoff.timestamp():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
     return user
+
+
+# TODO: The permission check function

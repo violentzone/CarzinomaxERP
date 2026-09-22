@@ -1,4 +1,6 @@
 from collections.abc import AsyncGenerator
+
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -21,7 +23,13 @@ SessionLocal = async_sessionmaker(
 
 # Declarative base class for models
 class Base(DeclarativeBase):
-    pass
+
+    def to_dict(self) -> dict[str, object]:
+        """Return mapped column values as a dict (relationships excluded)."""
+        return {
+            attr.key: getattr(self, attr.key)
+            for attr in inspect(self).mapper.column_attrs
+        }
 
 # Dependency to get db session
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

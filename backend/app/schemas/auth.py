@@ -10,6 +10,7 @@ class TokenPayload(BaseModel):
     iat: float
 
 class UserBase(BaseModel):
+    id: int
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     role: Optional[str] = "employee"

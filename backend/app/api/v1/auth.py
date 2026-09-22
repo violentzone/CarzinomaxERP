@@ -4,7 +4,7 @@ Authorization endpoints
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.core.log_module import system_log, user_log
 from app.core.security import create_access_token
 from app.models import User
+from app.schemas import UserResponse
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,7 +46,7 @@ async def login(user_email: str, password: str, db=Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     act_log.info(f'Login Successful, user: {str(user.id)}')
-    return create_access_token(user.id)
+    return Response(create_access_token(user.id), media_type="application/json", status_code=200)
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
@@ -67,8 +68,18 @@ async def logout(
     user_log(current_user.id).info("Logged out; access tokens issued before now are revoked")
 
 @auth_router.get("/me")
-async def me():
+async def me(current_user: User = Depends(get_current_user)) -> User:
     """
     Get current user
+    Args:
+        current_user: The user resolved from the Authorization: Bearer header
+
+    Returns:
+        The signed-in user, serialized as UserResponse
     """
-    return get_current_user()
+    calling_user = await get_current_user()
+    data = calling_user.to_dict()
+    return Response({
+        'status': 'success',
+        'data': data
+    }, status_code=status.HTTP_200_OK, media_type='application/json')
