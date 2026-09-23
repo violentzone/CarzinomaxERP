@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 from decimal import Decimal
 
 # Department
@@ -18,38 +18,6 @@ class DepartmentUpdate(BaseModel):
     manager_id: Optional[int] = None
 
 class DepartmentResponse(DepartmentBase):
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-# Employee
-class EmployeeBase(BaseModel):
-    user_id: Optional[int] = None
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    hire_date: date
-    department_id: Optional[int] = None
-    job_title: str
-    salary: Decimal = Field(default=Decimal("0.0"))
-    status: str = "active"
-
-class EmployeeCreate(EmployeeBase):
-    pass
-
-class EmployeeUpdate(BaseModel):
-    user_id: Optional[int] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    hire_date: Optional[date] = None
-    department_id: Optional[int] = None
-    job_title: Optional[str] = None
-    salary: Optional[Decimal] = None
-    status: Optional[str] = None
-
-class EmployeeResponse(EmployeeBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 

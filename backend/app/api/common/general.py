@@ -12,7 +12,8 @@ from starlette import status
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.models import User
+from app.models import User, UserRole
+
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -53,4 +54,15 @@ async def get_current_user(
     return user
 
 
-# TODO: The permission check function
+def permission_check(endpoint: str, login_user_id: int, permitted_role: UserRole) -> bool:
+    """
+    General function to check if the login user is allowed to access the API.
+    Args:
+        endpoint: Which functional endpoint model call check permissions.
+        login_user_id: Login user id
+        permitted_role:
+
+    Returns:
+
+    """
+    # TODO: keep here for permission check

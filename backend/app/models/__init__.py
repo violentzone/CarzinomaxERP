@@ -16,7 +16,6 @@ from app.models.scm import (
 )
 from app.models.hr import (
     Department,
-    Employee,
     AttendanceLog,
     LeaveRequest,
     Paycheck,
@@ -44,7 +43,6 @@ __all__ = [
     "Shipment",
     "ShipmentItem",
     "Department",
-    "Employee",
     "AttendanceLog",
     "LeaveRequest",
     "Paycheck",

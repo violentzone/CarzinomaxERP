@@ -22,7 +22,6 @@ from app.schemas.scm import (
 )
 from app.schemas.hr import (
     DepartmentBase, DepartmentCreate, DepartmentResponse,
-    EmployeeBase, EmployeeCreate, EmployeeResponse,
     AttendanceLogBase, AttendanceLogCreate, AttendanceLogResponse,
     LeaveRequestBase, LeaveRequestCreate, LeaveRequestResponse,
     PaycheckBase, PaycheckCreate, PaycheckResponse,
@@ -53,7 +52,6 @@ __all__ = [
     "ShipmentItemBase", "ShipmentItemCreate", "ShipmentItemResponse",
     "ShipmentBase", "ShipmentCreate", "ShipmentResponse",
     "DepartmentBase", "DepartmentCreate", "DepartmentResponse",
-    "EmployeeBase", "EmployeeCreate", "EmployeeResponse",
     "AttendanceLogBase", "AttendanceLogCreate", "AttendanceLogResponse",
     "LeaveRequestBase", "LeaveRequestCreate", "LeaveRequestResponse",
     "PaycheckBase", "PaycheckCreate", "PaycheckResponse",
