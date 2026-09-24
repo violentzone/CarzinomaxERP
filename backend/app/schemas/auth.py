@@ -13,7 +13,6 @@ class UserBase(BaseModel):
     id: int
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
-    role: Optional[str] = "employee"
     is_active: Optional[bool] = True
     has_finance_access: Optional[bool] = False
     has_scm_access: Optional[bool] = False
@@ -24,7 +23,6 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
-    role: Optional[str] = "employee"
     has_finance_access: Optional[bool] = False
     has_scm_access: Optional[bool] = False
     has_hr_access: Optional[bool] = False

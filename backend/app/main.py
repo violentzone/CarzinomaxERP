@@ -19,24 +19,6 @@ from app.core.scheduler import start_scheduler, shutdown_scheduler
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
-def _run_migrations(connection) -> None:
-    """Bring the database schema to the latest Alembic revision.
-
-    Databases created by the old create_all flow (tables exist but no
-    alembic_version) are stamped at the 0001 baseline first, so only the
-    later revisions run against them.
-
-    Args:
-        connection: A synchronous-facing SQLAlchemy connection (from run_sync).
-    """
-    cfg = AlembicConfig(str(BACKEND_DIR / "alembic.ini"))
-    cfg.attributes["connection"] = connection
-    inspector = inspect(connection)
-    if not inspector.has_table("alembic_version") and inspector.has_table("users"):
-        alembic_command.stamp(cfg, "0001")
-    alembic_command.upgrade(cfg, "head")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for the FastAPI application.
@@ -67,12 +49,6 @@ async def lifespan(app: FastAPI):
         f"<yellow>API {settings.API_V1_STR}</yellow>  |  <magenta>Ready</magenta>"
     )
 
-    # Apply Alembic migrations (creates the schema on a fresh database and
-    # upgrades existing ones; see backend/migration/)
-    async with engine.begin() as conn:
-        await conn.run_sync(_run_migrations)
-
-
     # Seed default admin user
     async with SessionLocal() as session:
         result = await session.execute(select(User).filter(User.email == settings.ADMIN_EMAIL))
@@ -83,7 +59,6 @@ async def lifespan(app: FastAPI):
                 email=settings.ADMIN_EMAIL,
                 hashed_password=hashed_pwd,
                 full_name="System Administrator",
-                role="admin",
                 is_active=True,
                 has_finance_access=True,
                 has_scm_access=True,

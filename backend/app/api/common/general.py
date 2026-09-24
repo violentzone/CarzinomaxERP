@@ -9,14 +9,15 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
+from typing import Literal
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.models import User, UserRole
+from app.models import User
+from app.core.log_module import user_log
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
-
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
@@ -54,15 +55,43 @@ async def get_current_user(
     return user
 
 
-def permission_check(endpoint: str, login_user_id: int, permitted_role: UserRole) -> bool:
+async def permission_check(endpoint: Literal['finance', 'scm', 'hr', 'dev'], login_user_id: int,
+                     db: AsyncSession = Depends(get_db)) -> bool:
     """
     General function to check if the login user is allowed to access the API.
     Args:
         endpoint: Which functional endpoint model call check permissions.
         login_user_id: Login user id
-        permitted_role:
+        db: Database session, defined in app.core.database.
 
     Returns:
-
+        True if permitted, False otherwise.
+        Raises error is false endpoint is given
     """
-    # TODO: keep here for permission check
+    log = user_log(login_user_id)
+    user = await db.get(User, int(login_user_id))
+    if not user:
+        # Found no current login user, shall not happen but checks everytime `permission_check` is called
+        return False
+
+    if endpoint == 'finance':
+        if not user.has_finance_access:
+            log.warning('User did not have finance access.')
+            return False
+    elif endpoint == 'scm':
+        if not user.has_scm_access:
+            log.warning('User did not have scm access.')
+            return False
+    elif endpoint == 'hr':
+        if not user.has_hr_access:
+            log.warning('User did not have hr access.')
+            return False
+    elif endpoint == 'dev':
+        if not user.has_dev_access:
+            log.warning('User did not have dev access.')
+            return False
+    else:
+        # Shall not happen cus parameter already defined, but still chek
+        raise ValueError('Endpoint must be either "scm" or "hr" or "dev"')
+    log.info(f'User permitted with {endpoint} endpoint.')
+    return True

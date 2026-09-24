@@ -4,13 +4,13 @@ HR module, Query, add, remove and update User
 from datetime import datetime
 from traceback import format_exc
 
-from fastapi import Depends, HTTPException, APIRouter
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse as Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from starlette import status
 
-from app.api.common import get_current_user
+from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
 from app.core.log_module import user_log
 from app.core.security import get_password_hash
@@ -31,7 +31,9 @@ async def get_user_list(current_user: User = Depends(get_current_user), db = Dep
     Returns:
         Jsonified list of User objects
     """
-    log = user_log(current_user.id if hasattr(current_user, "id") else current_user)
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info('Query all users')
     users = (await db.scalars(select(User))).all()
     data = []
@@ -58,7 +60,9 @@ async def get_user(user_id: int, current_user: User = Depends(get_current_user),
     Returns:
         Jsonified user object
     """
-    log = user_log(current_user.id if hasattr(current_user, "id") else current_user)
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Query user ID: {user_id}')
 
     user = await db.get(User, user_id)
@@ -76,7 +80,6 @@ class CreateUser(BaseModel):
     email: str
     password: str
     full_name: str | None = None
-    role: str | None = "employee"
     is_active: bool | None = True
     has_finance_access: bool | None = False
     has_scm_access: bool | None = False
@@ -89,7 +92,6 @@ class UpdateUser(BaseModel):
     email: str | None = None
     password: str | None = None
     full_name: str | None = None
-    role: str | None = None
     is_active: bool | None = None
     has_finance_access: bool | None = None
     has_scm_access: bool | None = None
@@ -110,7 +112,9 @@ async def create_user(new_user: CreateUser, current_user: User = Depends(get_cur
     Returns:
         Response body: {'status': 'success', 'data': user}/{'status': 'fail', 'error': error message}
     """
-    log = user_log(current_user.id if hasattr(current_user, "id") else current_user)
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Create user with email: {new_user.email}')
 
     try:
@@ -123,7 +127,6 @@ async def create_user(new_user: CreateUser, current_user: User = Depends(get_cur
             email=new_user.email,
             hashed_password=get_password_hash(new_user.password),
             full_name=new_user.full_name,
-            role=new_user.role or "employee",
             is_active=new_user.is_active if new_user.is_active is not None else True,
             has_finance_access=bool(new_user.has_finance_access),
             has_scm_access=bool(new_user.has_scm_access),
@@ -154,7 +157,9 @@ async def update_user(user_id: int, new_user: UpdateUser, current_user: User = D
     Returns:
         Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
     """
-    log = user_log(current_user.id if hasattr(current_user, "id") else current_user)
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Update user ID: {user_id}')
 
     old_user = await db.get(User, user_id)
@@ -191,7 +196,9 @@ async def delete_user(user_id: int, current_user: User = Depends(get_current_use
     Returns:
         Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
     """
-    log = user_log(current_user.id if hasattr(current_user, "id") else current_user)
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Delete user ID: {user_id}')
 
     user = await db.get(User, user_id)
