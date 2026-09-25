@@ -3,9 +3,6 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from alembic import command as alembic_command
-from alembic.config import Config as AlembicConfig
-from sqlalchemy import inspect
 from sqlalchemy.future import select
 
 from app.core.config import settings
@@ -37,11 +34,11 @@ async def lifespan(app: FastAPI):
     log.info("INFO: System Starting...")
 
     banner = r"""
-   ______                _                                    _____ ____  ____
-  / ____/___ ______ ____(_)___  ____  ____ ___  ____ __  __  / ___// __ \/ __ \
- / /   / __ `/ ___/_  // / __ \/ __ \/ __ `__ \/ __ `/ |/_/  \__ \/ /_/ / /_/ /
-/ /___/ /_/ / /   / //_/ / / / / /_/ / / / / / / /_/ />  <   ___/ / _, _/ ____/
-\____/\__,_/_/   /___/_/_/ /_/\____/_/ /_/ /_/\__,_/_/|_|  /____/_/ |_/_/
+   ______                _                                     ____  _______    __
+  / ____/___ ______ ____(_)___  ____  ____ ___  ____ __  __   / __ \/ ____/ |  / /
+ / /   / __ `/ ___/_  // / __ \/ __ \/ __ `__ \/ __ `/ |/_/  / / / / __/  | | / /
+/ /___/ /_/ / /   / //_/ / / / / /_/ / / / / / / /_/ />  <  / /_/ / /___  | |/ /
+\____/\__,_/_/   /___/_/_/ /_/\____/_/ /_/ /_/\__,_/_/|_|  /_____/_____/  |___/
 """
     log.opt(colors=True).info(
         f"<green>{banner}</green>\n"

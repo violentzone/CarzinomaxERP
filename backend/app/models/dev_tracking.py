@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Optional
-from sqlalchemy import String, Numeric, Date, Text
+from sqlalchemy import String, Numeric, Date, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -20,7 +20,7 @@ class DevInvestment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
-    project_id: Mapped[int] = mapped_column(foreign_key="dev_investments.project_id", nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     vendor: Mapped[str] = mapped_column(String(255), nullable=False)  # AWS, GCP, Vercel, etc.
     category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting
@@ -31,7 +31,7 @@ class ProjectDownload(Base, TimestampMixin):
     __tablename__ = "dev_project_downloads"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(foreign_key="dev_investments.project_id", nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     platform: Mapped[str] = mapped_column(String(50), default="github", nullable=False)  # github, dockerhub, npm
     download_count: Mapped[int] = mapped_column(nullable=False, default=0)
