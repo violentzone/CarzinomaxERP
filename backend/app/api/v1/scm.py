@@ -5,7 +5,6 @@ from decimal import Decimal
 from traceback import format_exc
 
 from fastapi import Depends, APIRouter
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse as Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -37,7 +36,7 @@ async def get_product_list(current_user: User = Depends(get_current_user), db = 
     products = (await db.scalars(select(Product))).all()
     data = []
     for p in products:
-        data.append(jsonable_encoder(p.to_dict()))
+        data.append(p.to_dict())
     log.info(f"{str(len(data))} products found")
 
     return Response({
@@ -68,7 +67,7 @@ async def get_product(product_id: int, current_user: User = Depends(get_current_
         log.warning(f'Product ID: {product_id} not found')
         return Response({"status": "fail", "error": f"Product with id {product_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-    product_data = jsonable_encoder(product.to_dict())
+    product_data = product.to_dict()
     log.info(f'Query product: {product_data}')
 
     return Response({"status": "success", "data": product_data}, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -123,7 +122,7 @@ async def create_product(new_product: CreateProduct, current_user: User = Depend
         db.add(product)
         await db.commit()
         await db.refresh(product)
-        product_data = jsonable_encoder(product.to_dict())
+        product_data = product.to_dict()
         log.info(f'Product created: {product_data}')
         return Response({"status": "success", "data": product_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
@@ -160,7 +159,7 @@ async def update_product(product_id: int, new_product: UpdateProduct, current_us
                 setattr(old_product, field_name, field_value)
         await db.commit()
         await db.refresh(old_product)
-        log.info(f'Product updated: {jsonable_encoder(old_product.to_dict())}')
+        log.info(f'Product updated: {old_product.to_dict()}')
         return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update product: {format_exc()}')

@@ -1,5 +1,4 @@
-from app.core.database import Base
-from app.models.base import TimestampMixin
+from app.models.base import Base, TimestampMixin
 from app.models.auth import User
 from app.models.finance import ExpenseType, Finance
 from app.models.scm import (

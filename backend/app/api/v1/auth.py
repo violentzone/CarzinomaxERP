@@ -5,6 +5,7 @@ Authorization endpoints
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -77,9 +78,8 @@ async def me(current_user: User = Depends(get_current_user)):
     Returns:
         The signed-in user, serialized as UserResponse
     """
-    calling_user = await get_current_user()
-    data = calling_user.to_dict()
-    return Response({
+    data = current_user.to_dict()
+    return JSONResponse({
         'status': 'success',
         'data': data
     }, status_code=status.HTTP_200_OK, media_type='application/json')

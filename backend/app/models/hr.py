@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
+from app.models.base import Base
 from app.models.base import TimestampMixin
 
 class Department(Base, TimestampMixin):
@@ -20,7 +20,7 @@ class AttendanceLog(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     # References the users table; kept the employee_id name for API/schema stability.
-    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     clock_in: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     clock_out: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -31,7 +31,7 @@ class LeaveRequest(Base, TimestampMixin):
     __tablename__ = "leave_requests"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     leave_type: Mapped[str] = mapped_column(String(50), nullable=False)  # sick, annual, unpaid, parental
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -44,7 +44,7 @@ class Paycheck(Base, TimestampMixin):
     __tablename__ = "paychecks"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     pay_period_start: Mapped[date] = mapped_column(Date, nullable=False)
     pay_period_end: Mapped[date] = mapped_column(Date, nullable=False)
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)

@@ -3,7 +3,7 @@ from sqlalchemy import String, Boolean, Uuid, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid import UUID, uuid4
 
-from app.core.database import Base
+from app.models.base import Base
 from app.models import TimestampMixin
 
 

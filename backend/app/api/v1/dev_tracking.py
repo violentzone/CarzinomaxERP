@@ -6,7 +6,6 @@ from decimal import Decimal
 from traceback import format_exc
 
 from fastapi import Depends, APIRouter
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse as Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -42,7 +41,7 @@ async def get_project_list(current_user: User = Depends(get_current_user), db = 
     projects = (await db.scalars(select(DevProject))).all()
     data = []
     for p in projects:
-        data.append(jsonable_encoder(p.to_dict()))
+        data.append(p.to_dict())
     log.info(f"{str(len(data))} dev projects found")
 
     return Response({
@@ -73,7 +72,7 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
         log.warning(f'Dev project ID: {project_id} not found')
         return Response({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-    project_data = jsonable_encoder(project.to_dict())
+    project_data = project.to_dict()
     log.info(f'Query dev project: {project_data}')
 
     return Response({"status": "success", "data": project_data}, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -114,7 +113,7 @@ async def create_project(new_project: CreateProject, current_user: User = Depend
         db.add(project)
         await db.commit()
         await db.refresh(project)
-        project_data = jsonable_encoder(project.to_dict())
+        project_data = project.to_dict()
         log.info(f'Dev project created: {project_data}')
         return Response({"status": "success", "data": project_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
@@ -151,7 +150,7 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
                 setattr(old_project, field_name, field_value)
         await db.commit()
         await db.refresh(old_project)
-        log.info(f'Dev project updated: {jsonable_encoder(old_project.to_dict())}')
+        log.info(f'Dev project updated: {old_project.to_dict()}')
         return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update dev project: {format_exc()}')
@@ -212,7 +211,7 @@ async def get_investment_list(current_user: User = Depends(get_current_user), db
     investments = (await db.scalars(select(DevInvestment))).all()
     data = []
     for i in investments:
-        data.append(jsonable_encoder(i.to_dict()))
+        data.append(i.to_dict())
     log.info(f"{str(len(data))} dev investments found")
 
     return Response({
@@ -243,7 +242,7 @@ async def get_investment(investment_id: int, current_user: User = Depends(get_cu
         log.warning(f'Dev investment ID: {investment_id} not found')
         return Response({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-    investment_data = jsonable_encoder(investment.to_dict())
+    investment_data = investment.to_dict()
     log.info(f'Query dev investment: {investment_data}')
 
     return Response({"status": "success", "data": investment_data}, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -301,7 +300,7 @@ async def create_investment(new_investment: CreateInvestment, current_user: User
         db.add(investment)
         await db.commit()
         await db.refresh(investment)
-        investment_data = jsonable_encoder(investment.to_dict())
+        investment_data = investment.to_dict()
         log.info(f'Dev investment created: {investment_data}')
         return Response({"status": "success", "data": investment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
@@ -344,7 +343,7 @@ async def update_investment(investment_id: int, new_investment: UpdateInvestment
                 setattr(old_investment, field_name, field_value)
         await db.commit()
         await db.refresh(old_investment)
-        log.info(f'Dev investment updated: {jsonable_encoder(old_investment.to_dict())}')
+        log.info(f'Dev investment updated: {old_investment.to_dict()}')
         return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update dev investment: {format_exc()}')
@@ -405,7 +404,7 @@ async def get_download_list(current_user: User = Depends(get_current_user), db =
     downloads = (await db.scalars(select(ProjectDownload))).all()
     data = []
     for d in downloads:
-        data.append(jsonable_encoder(d.to_dict()))
+        data.append(d.to_dict())
     log.info(f"{str(len(data))} project downloads found")
 
     return Response({
@@ -436,7 +435,7 @@ async def get_download(download_id: int, current_user: User = Depends(get_curren
         log.warning(f'Project download ID: {download_id} not found')
         return Response({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-    download_data = jsonable_encoder(download.to_dict())
+    download_data = download.to_dict()
     log.info(f'Query project download: {download_data}')
 
     return Response({"status": "success", "data": download_data}, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -491,7 +490,7 @@ async def create_download(new_download: CreateDownload, current_user: User = Dep
         db.add(download)
         await db.commit()
         await db.refresh(download)
-        download_data = jsonable_encoder(download.to_dict())
+        download_data = download.to_dict()
         log.info(f'Project download created: {download_data}')
         return Response({"status": "success", "data": download_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
@@ -534,7 +533,7 @@ async def update_download(download_id: int, new_download: UpdateDownload, curren
                 setattr(old_download, field_name, field_value)
         await db.commit()
         await db.refresh(old_download)
-        log.info(f'Project download updated: {jsonable_encoder(old_download.to_dict())}')
+        log.info(f'Project download updated: {old_download.to_dict()}')
         return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update project download: {format_exc()}')
