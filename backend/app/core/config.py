@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Async database URL computed automatically
     ASYNC_DATABASE_URL: str = ""
     LLM_TYPE: str = "remote"
-    LLM_API_BASE = ""
+    LLM_API_BASE: str = ""
     LLM_MODEL: str = ""
     LLM_KEY: str = ""
 

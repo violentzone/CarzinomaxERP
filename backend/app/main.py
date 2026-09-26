@@ -12,6 +12,7 @@ from app.models.auth import User
 from app.api.v1 import api_router
 from app.core.log_module import system_log
 from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.ai_service import LlmRouter
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -66,9 +67,17 @@ async def lifespan(app: FastAPI):
             await session.commit()
             system_log().info(f"Default admin user created ({settings.ADMIN_EMAIL})")
 
+    # Verify the LLM configured in .env is reachable. Failure is logged but does
+    # not block startup, so the rest of the ERP stays usable without an LLM.
+    try:
+        await LlmRouter.model_check()
+        log.info(f"LLM ready ({settings.LLM_TYPE}: {settings.LLM_MODEL})")
+    except Exception as e:
+        log.error(f"LLM check failed, AI features unavailable: {e}")
+
     # Start background scheduler
     start_scheduler()
-            
+
     yield
     # Shutdown background scheduler
     shutdown_scheduler()

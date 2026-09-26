@@ -1,7 +1,6 @@
 import traceback
 from pydantic import BaseModel
 import litellm
-import asyncio
 
 from app.core.log_module import user_log, system_log
 from app.core.config import settings
@@ -15,18 +14,12 @@ class LlmException(Exception):
 class LlmRouter:
     def __init__(self, user_id: str, function_called: str):
         """
-        Llm Router using Litellm
+        Llm Router using Litellm.
+        Connection is verified once at app startup via `LlmRouter.model_check()`.
         Args:
-            user_id ():
-            function_called ():
+            user_id (): User the requests are logged under
+            function_called (): Name of the calling feature, for logging
         """
-        self.llm_log = user_log(user_id)
-        try:
-            asyncio.run(self.model_check())
-        except Exception as e:
-            self.llm_log.error(traceback.format_exc())
-            raise LlmException(str(e))
-
         self.model = settings.LLM_MODEL
         self.api_base = settings.LLM_API_BASE or None
         self.user_id = user_id
@@ -50,7 +43,8 @@ class LlmRouter:
             if not settings.LLM_API_BASE:
                 raise ValueError('LLM_API_BASE set')
 
-        # LiteLLM `ahealth_check`
+        # One-token ping to verify the model is reachable and credentials are accepted.
+        # (litellm.ahealth_check is proxy-oriented and pulls in extra dependencies.)
         model_conf = {
             "model": settings.LLM_MODEL,
             "api_key": settings.LLM_KEY,
@@ -59,9 +53,7 @@ class LlmRouter:
             "timeout": 30}
         if settings.LLM_TYPE == 'local':
             model_conf.update({'api_base': settings.LLM_API_BASE})
-        llm_check_result = await litellm.ahealth_check(model_conf)
-        if 'error' in llm_check_result:
-            raise RuntimeError(llm_check_result)
+        await litellm.acompletion(**model_conf)
 
     async def chat(self, system_prompt: str, message: list[dict]) -> str:
         """
