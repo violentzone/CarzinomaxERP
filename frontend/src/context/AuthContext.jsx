@@ -1,14 +1,24 @@
 /* eslint-disable react-refresh/only-export-components -- provider + useAuth hook are intentionally colocated */
 /**
- * Authentication context: holds the JWT + current user, exposes login/logout,
- * and a `hasRole` helper. The token persists in localStorage; on mount (or when
- * a token exists) we hydrate the user from `GET /auth/me`.
+ * Authentication context: holds the JWT + current user, exposes login/logout
+ * and a `can(module)` helper. The token persists in localStorage; on mount (or
+ * when a token exists) we hydrate the user from `GET /auth/me`. Any 401 from
+ * the API (expired or revoked token) signs the user out.
  */
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { authApi } from '../api/auth'
-import { getToken, setToken, ApiError } from '../lib/api'
+import { getToken, setToken, ApiError, UNAUTHORIZED_EVENT } from '../lib/api'
+import { canAccess, isAdmin } from '../lib/roles'
 
 const AuthContext = createContext(null)
+
+/** Never keep the password hash around on the client, even if the API sends it. */
+function sanitize(user) {
+  if (!user) return null
+  // eslint-disable-next-line no-unused-vars
+  const { hashed_password, ...rest } = user
+  return rest
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -22,7 +32,7 @@ export function AuthProvider({ children }) {
     }
     try {
       const me = await authApi.me()
-      setUser(me)
+      setUser(sanitize(me))
     } catch (err) {
       // A bad/expired token surfaces here — drop it so the app shows login.
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
@@ -40,36 +50,51 @@ export function AuthProvider({ children }) {
     loadUser()
   }, [loadUser])
 
+  // Token rejected mid-session (expired, or revoked by a logout elsewhere).
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setToken(null)
+      setUser(null)
+    }
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+  }, [])
+
   const login = useCallback(async (email, password) => {
-    const { access_token } = await authApi.login(email, password)
-    setToken(access_token)
-    const me = await authApi.me()
-    setUser(me)
-    return me
+    const token = await authApi.login(email, password)
+    setToken(token)
+    try {
+      const me = sanitize(await authApi.me())
+      setUser(me)
+      return me
+    } catch (err) {
+      setToken(null)
+      throw err
+    }
   }, [])
 
-  const logout = useCallback(() => {
-    setToken(null)
-    setUser(null)
+  const logout = useCallback(async () => {
+    try {
+      // Revokes every token issued before now, on every device.
+      if (getToken()) await authApi.logout()
+    } catch {
+      // Already signed out server-side (or offline) — clear locally regardless.
+    } finally {
+      setToken(null)
+      setUser(null)
+    }
   }, [])
 
-  const hasRole = useCallback(
-    (roles) => {
-      if (!user) return false
-      if (user.role === 'admin') return true
-      if (!roles) return true
-      return roles.includes(user.role)
-    },
-    [user],
-  )
+  const can = useCallback((module) => canAccess(user, module), [user])
 
   const value = {
     user,
     loading,
     isAuthenticated: !!user,
+    isAdmin: isAdmin(user),
     login,
     logout,
-    hasRole,
+    can,
     reload: loadUser,
   }
 

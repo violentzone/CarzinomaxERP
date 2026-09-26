@@ -1,157 +1,116 @@
-import { useState, useEffect } from 'react'
-import {
-  ShieldCheck,
-  UserPlus,
-  Wallet,
-  Boxes,
-  Users as UsersIcon,
-  LineChart,
-  Pencil,
-  X,
-} from 'lucide-react'
-import { authApi } from '../../api/auth'
+import { useState } from 'react'
+import { ShieldCheck, UserPlus, Wallet, Boxes, Users as UsersIcon, LineChart, Pencil, Trash2, X } from 'lucide-react'
+import { hrApi } from '../../api/hr'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { titleize } from '../../lib/format'
-import { ROLE_LABELS } from '../../lib/roles'
+import { useList } from '../../lib/useList'
+import { date as fmtDate, userName } from '../../lib/format'
+import { accessLabel, MODULE_FLAGS } from '../../lib/roles'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import AccessDenied from '../../components/ui/AccessDenied'
 import Table from '../../components/ui/Table'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Field, Input, Select } from '../../components/ui/Field'
 
-const ROLES = Object.keys(ROLE_LABELS).map((v) => ({ value: v, label: ROLE_LABELS[v] }))
+const PERMISSIONS = [
+  { key: 'has_dev_access', label: 'Dev Tracking', hint: 'Projects, investments, downloads', icon: LineChart },
+  { key: 'has_hr_access', label: 'People & Payroll', hint: 'Users, attendance, leave, paychecks', icon: UsersIcon },
+  { key: 'has_finance_access', label: 'Finance', hint: 'Expense ledger & overview', icon: Wallet },
+  { key: 'has_scm_access', label: 'Purchases', hint: 'Product / purchase catalog', icon: Boxes },
+]
 
+const EMPTY = {
+  email: '',
+  full_name: '',
+  password: '',
+  is_active: true,
+  has_finance_access: false,
+  has_scm_access: false,
+  has_hr_access: false,
+  has_dev_access: false,
+}
+
+/**
+ * User management (HR access required). Users are the employee directory and
+ * carry per-module access flags; there is no separate "admin" role — a user
+ * with all four flags is effectively an administrator.
+ */
 export default function UsersPage() {
-  const { user } = useAuth()
+  const { user: me, can, reload: reloadMe } = useAuth()
   const toast = useToast()
+  const { rows: users, loading, denied, error, reload } = useList(() => hrApi.listUsers())
 
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [values, setValues] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [removing, setRemoving] = useState(false)
 
-  const [values, setValues] = useState({
-    email: '',
-    full_name: '',
-    role: 'employee',
-    is_active: true,
-    has_finance_access: false,
-    has_scm_access: false,
-    has_hr_access: false,
-    has_dev_access: false,
-    password: '',
-  })
+  if (!can('hr') || denied) return <AccessDenied module="user management" />
 
-  const loadUsers = async () => {
-    try {
-      setLoading(true)
-      const list = await authApi.listUsers()
-      setUsers(list)
-    } catch (err) {
-      toast.error(err?.detail || 'Could not fetch users')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let alive = true
-    if (user?.role === 'admin') {
-      authApi.listUsers()
-        .then((list) => {
-          if (alive) {
-            setUsers(list)
-            setLoading(false)
-          }
-        })
-        .catch((err) => {
-          if (alive) {
-            toast.error(err?.detail || 'Could not fetch users')
-            setLoading(false)
-          }
-        })
-    }
-    return () => {
-      alive = false
-    }
-  }, [user, toast])
-
-  if (user?.role !== 'admin') return <AccessDenied module="user management" />
+  const setField = (k, v) => setValues((s) => ({ ...s, [k]: v }))
+  const isSelf = (u) => u && me && u.id === me.id
 
   const startEdit = (u) => {
-    setSelectedUser(u)
+    setSelected(u)
     setValues({
-      email: u.email,
+      email: u.email || '',
       full_name: u.full_name || '',
-      role: u.role || 'employee',
-      is_active: u.is_active,
-      has_finance_access: u.has_finance_access || false,
-      has_scm_access: u.has_scm_access || false,
-      has_hr_access: u.has_hr_access || false,
-      has_dev_access: u.has_dev_access || false,
       password: '',
+      is_active: !!u.is_active,
+      has_finance_access: !!u.has_finance_access,
+      has_scm_access: !!u.has_scm_access,
+      has_hr_access: !!u.has_hr_access,
+      has_dev_access: !!u.has_dev_access,
     })
   }
 
   const cancelEdit = () => {
-    setSelectedUser(null)
-    setValues({
-      email: '',
-      full_name: '',
-      role: 'employee',
-      is_active: true,
-      has_finance_access: false,
-      has_scm_access: false,
-      has_hr_access: false,
-      has_dev_access: false,
-      password: '',
-    })
+    setSelected(null)
+    setValues(EMPTY)
   }
 
   const submit = async (e) => {
     e.preventDefault()
+    if (selected && isSelf(selected) && !values.is_active) {
+      toast.error('You cannot deactivate your own account')
+      return
+    }
     setSaving(true)
     try {
-      if (selectedUser) {
-        // Edit flow
-        const updated = await authApi.updateUser(selectedUser.id, {
-          email: values.email,
-          full_name: values.full_name,
-          role: values.role,
+      const flags = Object.fromEntries(Object.values(MODULE_FLAGS).map((f) => [f, !!values[f]]))
+      if (selected) {
+        await hrApi.updateUser(selected.id, {
+          email: values.email.trim(),
+          full_name: values.full_name.trim() || undefined,
           is_active: values.is_active,
-          has_finance_access: values.has_finance_access,
-          has_scm_access: values.has_scm_access,
-          has_hr_access: values.has_hr_access,
-          has_dev_access: values.has_dev_access,
+          ...flags,
           password: values.password || undefined,
         })
-        toast.success(`User ${updated.email} updated successfully`)
-        cancelEdit()
-        loadUsers()
+        toast.success(`${values.full_name || values.email} updated`)
+        if (isSelf(selected)) {
+          await reloadMe()
+          if (!values.has_hr_access) toast.info('You removed your own HR access — this page is now locked')
+        }
       } else {
-        // Create flow
         if (!values.password) {
-          toast.error('Password is required for new users')
-          setSaving(false)
+          toast.error('A password is required for new users')
           return
         }
-        const created = await authApi.register({
-          email: values.email,
+        await hrApi.createUser({
+          email: values.email.trim(),
           password: values.password,
-          full_name: values.full_name || undefined,
-          role: values.role || 'employee',
-          has_finance_access: values.has_finance_access,
-          has_scm_access: values.has_scm_access,
-          has_hr_access: values.has_hr_access,
-          has_dev_access: values.has_dev_access,
+          full_name: values.full_name.trim() || undefined,
+          is_active: values.is_active,
+          ...flags,
         })
-        toast.success(`User ${created.email} created successfully`)
-        cancelEdit()
-        loadUsers()
+        toast.success(`${values.full_name || values.email} created`)
       }
+      cancelEdit()
+      reload()
     } catch (err) {
       toast.error(err?.detail || 'Could not save user')
     } finally {
@@ -159,53 +118,74 @@ export default function UsersPage() {
     }
   }
 
-  const setField = (k, v) => setValues((s) => ({ ...s, [k]: v }))
+  const confirmRemove = async () => {
+    setRemoving(true)
+    try {
+      await hrApi.deleteUser(pendingRemove.id)
+      toast.success(`${userName(pendingRemove)} deleted`)
+      if (selected?.id === pendingRemove.id) cancelEdit()
+      setPendingRemove(null)
+      reload()
+    } catch (err) {
+      toast.error(err?.detail || 'Could not delete user')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  const sorted = [...users].sort(
+    (a, b) => Number(b.is_active) - Number(a.is_active) || userName(a).localeCompare(userName(b)),
+  )
 
   const columns = [
     {
       key: 'name',
-      header: 'User details',
+      header: 'User',
       render: (r) => (
         <div className="col">
-          <span className="cell-strong" style={{ fontWeight: 600 }}>{r.full_name || '—'}</span>
-          <span className="muted" style={{ fontSize: '13px' }}>{r.email}</span>
+          <span className="cell-strong">
+            {r.full_name || '—'}
+            {isSelf(r) && (
+              <span className="muted" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
+                (you)
+              </span>
+            )}
+          </span>
+          <span className="cell-sub">{r.email}</span>
         </div>
       ),
     },
     {
-      key: 'role',
-      header: 'Role',
-      render: (r) => <Badge tone={r.role === 'admin' ? 'success' : 'info'}>{ROLE_LABELS[r.role] || titleize(r.role)}</Badge>,
+      key: 'access',
+      header: 'Access',
+      render: (r) => {
+        const granted = PERMISSIONS.filter((p) => r[p.key])
+        return (
+          <div className="col gap-1">
+            <span style={{ fontSize: 13 }}>{accessLabel(r)}</span>
+            <div className="row gap-1 wrap">
+              {granted.length ? (
+                granted.map((p) => (
+                  <Badge key={p.key} tone="success">
+                    {p.label}
+                  </Badge>
+                ))
+              ) : (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  No module access
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      },
     },
-    {
-      key: 'permissions',
-      header: 'Module access',
-      render: (r) => (
-        <div className="row gap-2 wrap">
-          <Badge tone={r.has_finance_access ? 'success' : 'neutral'} style={{ opacity: r.has_finance_access ? 1 : 0.45 }}>
-            Finance
-          </Badge>
-          <Badge tone={r.has_scm_access ? 'info' : 'neutral'} style={{ opacity: r.has_scm_access ? 1 : 0.45 }}>
-            SCM
-          </Badge>
-          <Badge tone={r.has_hr_access ? 'warning' : 'neutral'} style={{ opacity: r.has_hr_access ? 1 : 0.45 }}>
-            People
-          </Badge>
-          <Badge tone={r.has_dev_access ? 'danger' : 'neutral'} style={{ opacity: r.has_dev_access ? 1 : 0.45 }}>
-            Dev
-          </Badge>
-        </div>
-      ),
-    },
+    { key: 'created_at', header: 'Joined', className: 'nowrap', render: (r) => <span className="muted">{fmtDate(r.created_at)}</span> },
     {
       key: 'status',
       header: 'Status',
       width: 90,
-      render: (r) => (
-        <Badge tone={r.is_active ? 'success' : 'danger'}>
-          {r.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
+      render: (r) => <Badge tone={r.is_active ? 'success' : 'danger'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>,
     },
     {
       key: 'actions',
@@ -213,9 +193,22 @@ export default function UsersPage() {
       align: 'right',
       width: 80,
       render: (r) => (
-        <Button variant="ghost" size="sm" icon={Pencil} onClick={() => startEdit(r)}>
-          Edit
-        </Button>
+        <span className="row-actions">
+          <button type="button" className="icon-btn" onClick={() => startEdit(r)} aria-label="Edit user" title="Edit">
+            <Pencil size={15} />
+          </button>
+          {!isSelf(r) && (
+            <button
+              type="button"
+              className="icon-btn line-remove"
+              onClick={() => setPendingRemove(r)}
+              aria-label="Delete user"
+              title="Delete"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </span>
       ),
     },
   ]
@@ -223,60 +216,58 @@ export default function UsersPage() {
   return (
     <div className="module-page col gap-5">
       <PageHeader
-        title="User Management"
-        subtitle="Provision team members, reset passwords, and configure module-level access."
+        title="Users & Access"
+        subtitle="Provision team members, reset passwords and choose which modules each person can open."
         icon={ShieldCheck}
       />
 
       <div className="row items-start gap-5 wrap" style={{ width: '100%' }}>
-        {/* Left Side: Users List */}
         <div style={{ flex: '2 1 600px', minWidth: 320 }} className="col gap-4">
           <Card className="card-pad col gap-4">
             <div className="row spread">
               <div>
-                <h2>System Users</h2>
-                <p className="muted">Currently registered system accounts and their authorizations.</p>
+                <h2>Team</h2>
+                <p className="muted">Everyone with an account, and what they can access.</p>
               </div>
-              <Button onClick={loadUsers} variant="outline" size="sm">
+              <Button onClick={reload} variant="outline" size="sm" loading={loading}>
                 Refresh
               </Button>
             </div>
 
-            <Table
-              columns={columns}
-              rows={users}
-              loading={loading}
-              empty={{
-                title: 'No users found',
-                hint: 'Try refreshing or create a new user.',
-              }}
-            />
+            {error ? (
+              <div className="note-box">{error}</div>
+            ) : (
+              <Table
+                columns={columns}
+                rows={sorted}
+                loading={loading}
+                empty={{ title: 'No users found', hint: 'Create the first account with the form.' }}
+              />
+            )}
           </Card>
         </div>
 
-        {/* Right Side: Form */}
         <div style={{ flex: '1 1 350px', minWidth: 320 }} className="col gap-4">
-          <Card className="card-pad col gap-4" variant={!!selectedUser}>
+          <Card className="card-pad col gap-4" variant={!!selected}>
             <div>
-              <h2>{selectedUser ? 'Edit User Permissions' : 'Create User Account'}</h2>
+              <h2>{selected ? 'Edit user' : 'New user'}</h2>
               <p className="muted">
-                {selectedUser
-                  ? `Configure account details and module permissions for ${selectedUser.email}.`
-                  : 'Register a new team member and assign their initial workspace access.'}
+                {selected
+                  ? `Update details and module access for ${userName(selected)}.`
+                  : 'Register a team member and grant their initial module access.'}
               </p>
             </div>
 
             <form onSubmit={submit} className="col gap-4">
-              <Field label="Full Name" required={!selectedUser}>
+              <Field label="Full name">
                 <Input
                   value={values.full_name}
                   onChange={(e) => setField('full_name', e.target.value)}
                   placeholder="e.g. Ada Lovelace"
-                  required={!selectedUser}
                 />
               </Field>
 
-              <Field label="Email Address" required>
+              <Field label="Email" required>
                 <Input
                   type="email"
                   value={values.email}
@@ -287,113 +278,82 @@ export default function UsersPage() {
               </Field>
 
               <Field
-                label={selectedUser ? 'Change Password' : 'Temporary Password'}
-                required={!selectedUser}
-                hint={selectedUser ? 'Leave blank to keep existing password' : ''}
+                label={selected ? 'New password' : 'Password'}
+                required={!selected}
+                hint={selected ? 'Leave blank to keep the current password.' : 'Share it with the person; they can’t change it themselves yet.'}
               >
                 <Input
                   type="password"
                   value={values.password}
                   onChange={(e) => setField('password', e.target.value)}
-                  placeholder={selectedUser ? '••••••••' : 'Enter temporary password'}
-                  required={!selectedUser}
+                  placeholder={selected ? '••••••••' : 'Temporary password'}
+                  required={!selected}
+                  autoComplete="new-password"
                 />
               </Field>
 
-              <Field label="Base System Role" required>
-                <Select value={values.role} onChange={(e) => setField('role', e.target.value)} required>
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Account Status">
+              <Field label="Account status" hint={selected && isSelf(selected) ? 'You cannot deactivate yourself.' : undefined}>
                 <Select
                   value={values.is_active ? 'active' : 'inactive'}
+                  disabled={selected && isSelf(selected)}
                   onChange={(e) => setField('is_active', e.target.value === 'active')}
                 >
                   <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="inactive">Inactive — cannot sign in</option>
                 </Select>
               </Field>
 
-              {/* Granular Module Permissions */}
-              <div className="col gap-3" style={{ padding: 'var(--s-2) 0', borderTop: '1px solid var(--border)', marginTop: 'var(--s-2)' }}>
-                <span className="field-label" style={{ fontWeight: 600 }}>Granular Module Permissions</span>
-                <span className="field-hint muted">Check which navbar items this user is authorized to access:</span>
-                
-                <div className="col gap-3" style={{ marginTop: 'var(--s-1)' }}>
-                  <label className="row gap-3" style={{ cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ cursor: 'pointer', width: 17, height: 17 }}
-                      checked={values.has_finance_access}
-                      onChange={(e) => setField('has_finance_access', e.target.checked)}
-                    />
-                    <div className="row gap-2">
-                      <Wallet size={16} className="muted" />
-                      <span>Finance & Accounting</span>
-                    </div>
-                  </label>
-
-                  <label className="row gap-3" style={{ cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ cursor: 'pointer', width: 17, height: 17 }}
-                      checked={values.has_scm_access}
-                      onChange={(e) => setField('has_scm_access', e.target.checked)}
-                    />
-                    <div className="row gap-2">
-                      <Boxes size={16} className="muted" />
-                      <span>Supply Chain</span>
-                    </div>
-                  </label>
-
-                  <label className="row gap-3" style={{ cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ cursor: 'pointer', width: 17, height: 17 }}
-                      checked={values.has_hr_access}
-                      onChange={(e) => setField('has_hr_access', e.target.checked)}
-                    />
-                    <div className="row gap-2">
-                      <UsersIcon size={16} className="muted" />
-                      <span>People & HR</span>
-                    </div>
-                  </label>
-
-                  <label className="row gap-3" style={{ cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ cursor: 'pointer', width: 17, height: 17 }}
-                      checked={values.has_dev_access}
-                      onChange={(e) => setField('has_dev_access', e.target.checked)}
-                    />
-                    <div className="row gap-2">
-                      <LineChart size={16} className="muted" />
-                      <span>Dev Tracking</span>
-                    </div>
-                  </label>
+              <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
+                <span className="field-label">Module access</span>
+                <div className="perm-grid">
+                  {PERMISSIONS.map((p) => {
+                    const Icon = p.icon
+                    return (
+                      <label key={p.key} className="check-field">
+                        <input
+                          type="checkbox"
+                          checked={!!values[p.key]}
+                          onChange={(e) => setField(p.key, e.target.checked)}
+                        />
+                        <span>
+                          <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
+                            <Icon size={14} className="muted" /> {p.label}
+                          </span>
+                          <span className="field-hint muted">{p.hint}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
                 </div>
+                <span className="field-hint muted">
+                  All four together make an administrator. User management needs People &amp; Payroll.
+                </span>
               </div>
 
               <div className="row gap-2" style={{ justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
-                {selectedUser && (
+                {selected && (
                   <Button variant="ghost" icon={X} onClick={cancelEdit} disabled={saving}>
                     Cancel
                   </Button>
                 )}
-                <Button type="submit" icon={selectedUser ? ShieldCheck : UserPlus} loading={saving}>
-                  {selectedUser ? 'Save Permissions' : 'Create User'}
+                <Button type="submit" icon={selected ? ShieldCheck : UserPlus} loading={saving}>
+                  {selected ? 'Save changes' : 'Create user'}
                 </Button>
               </div>
             </form>
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={removing}
+        title="Delete user"
+        message={pendingRemove ? `This will permanently delete ${userName(pendingRemove)}.` : ''}
+        hint="Their attendance logs, leave requests and paychecks are deleted with them. Prefer marking the account inactive to keep history."
+      />
     </div>
   )
 }

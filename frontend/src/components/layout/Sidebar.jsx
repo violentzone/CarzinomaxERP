@@ -1,19 +1,27 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { navForRole, ROLE_LABELS } from '../../lib/roles'
+import { navForUser, accessLabel } from '../../lib/roles'
+import Spinner from '../ui/Spinner'
 
-/** Left navigation. Items are filtered by the current user's role. */
+/** Left navigation. Items are filtered by the current user's module flags. */
 export default function Sidebar({ open, onNavigate }) {
   const { user, logout } = useAuth()
-  const items = navForRole(user)
+  const [signingOut, setSigningOut] = useState(false)
+  const items = navForUser(user)
   const initials = (user?.full_name || user?.email || '?')
     .split(/[\s@.]+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase())
     .join('')
+
+  const signOut = async () => {
+    setSigningOut(true)
+    await logout()
+  }
 
   return (
     <aside className={`sidebar ${open ? 'open' : ''}`}>
@@ -64,10 +72,10 @@ export default function Sidebar({ open, onNavigate }) {
             <div className="user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user?.full_name || user?.email}
             </div>
-            <div className="user-role">{ROLE_LABELS[user?.role] || user?.role}</div>
+            <div className="user-role">{accessLabel(user)}</div>
           </div>
-          <button className="icon-btn" onClick={logout} aria-label="Sign out" title="Sign out">
-            <LogOut size={17} />
+          <button className="icon-btn" onClick={signOut} disabled={signingOut} aria-label="Sign out" title="Sign out">
+            {signingOut ? <Spinner size={15} /> : <LogOut size={17} />}
           </button>
         </div>
       </div>

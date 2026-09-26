@@ -1,26 +1,40 @@
-/** Human Resources endpoints: /api/v1/hr */
+/**
+ * People & HR endpoints: /api/v1/hr
+ *
+ * Users double as the employee directory (there is no separate Employee
+ * table), so user management also lives here and requires HR access.
+ */
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 
 export const hrApi = {
-  listDepartments: () => apiGet('/hr/departments'),
-  createDepartment: (payload) => apiPost('/hr/departments', payload),
-  updateDepartment: (id, payload) => apiPut(`/hr/departments/${id}`, payload),
-  deleteDepartment: (id) => apiDelete(`/hr/departments/${id}`),
+  // Users / employees
+  listUsers: () => apiGet('/hr/user_list'),
+  getUser: (id) => apiGet(`/hr/user/${id}`),
+  createUser: (payload) => apiPost('/hr/user', payload),
+  updateUser: (id, payload) => apiPut(`/hr/user/${id}`, payload),
+  deleteUser: (id) => apiDelete(`/hr/user/${id}`),
 
-  listEmployees: (params) => apiGet('/hr/employees', params),
-  createEmployee: (payload) => apiPost('/hr/employees', payload),
-  updateEmployee: (id, payload) => apiPut(`/hr/employees/${id}`, payload),
-  deleteEmployee: (id) => apiDelete(`/hr/employees/${id}`),
+  // Departments
+  listDepartments: () => apiGet('/hr/department_list'),
+  createDepartment: (payload) => apiPost('/hr/department', payload),
+  updateDepartment: (id, payload) => apiPut(`/hr/department/${id}`, payload),
+  deleteDepartment: (id) => apiDelete(`/hr/department/${id}`),
 
-  clockIn: (employeeId) => apiPost(`/hr/attendance/clock-in?employee_id=${employeeId}`),
-  clockOut: (employeeId) => apiPost(`/hr/attendance/clock-out?employee_id=${employeeId}`),
+  // Attendance logs
+  listAttendance: () => apiGet('/hr/attendance_list'),
+  createAttendance: (payload) => apiPost('/hr/attendance', payload),
   updateAttendance: (id, payload) => apiPut(`/hr/attendance/${id}`, payload),
   deleteAttendance: (id) => apiDelete(`/hr/attendance/${id}`),
 
-  createLeave: (payload) => apiPost('/hr/leaves', payload),
-  updateLeave: (id, payload) => apiPut(`/hr/leaves/${id}`, payload),
-  deleteLeave: (id) => apiDelete(`/hr/leaves/${id}`),
-  createPaycheck: (payload) => apiPost('/hr/paychecks', payload),
-  updatePaycheck: (id, payload) => apiPut(`/hr/paychecks/${id}`, payload),
-  deletePaycheck: (id) => apiDelete(`/hr/paychecks/${id}`),
+  // Leave requests
+  listLeaves: () => apiGet('/hr/leave_request_list'),
+  createLeave: (payload) => apiPost('/hr/leave_request', payload),
+  updateLeave: (id, payload) => apiPut(`/hr/leave_request/${id}`, payload),
+  deleteLeave: (id) => apiDelete(`/hr/leave_request/${id}`),
+
+  // Paychecks
+  listPaychecks: () => apiGet('/hr/paycheck_list'),
+  createPaycheck: (payload) => apiPost('/hr/paycheck', payload),
+  updatePaycheck: (id, payload) => apiPut(`/hr/paycheck/${id}`, payload),
+  deletePaycheck: (id) => apiDelete(`/hr/paycheck/${id}`),
 }

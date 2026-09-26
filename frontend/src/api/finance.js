@@ -1,28 +1,17 @@
-/** Finance endpoints: /api/v1/finance */
+/**
+ * Finance endpoints: /api/v1/finance
+ *
+ * The finance ledger is a typed expense log: each record has a UUID and an
+ * `expense_type` of `paycheck | petty_cash | investment | other`.
+ */
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 
+export const EXPENSE_TYPES = ['paycheck', 'petty_cash', 'investment', 'other']
+
 export const financeApi = {
-  listAccounts: (params) => apiGet('/finance/accounts', params),
-  createAccount: (payload) => apiPost('/finance/accounts', payload),
-  updateAccount: (id, payload) => apiPut(`/finance/accounts/${id}`, payload),
-  deleteAccount: (id) => apiDelete(`/finance/accounts/${id}`),
-
-  listInvoices: (params) => apiGet('/finance/invoices', params),
-  createInvoice: (payload) => apiPost('/finance/invoices', payload),
-  updateInvoice: (id, payload) => apiPut(`/finance/invoices/${id}`, payload),
-  deleteInvoice: (id) => apiDelete(`/finance/invoices/${id}`),
-
-  listPayments: (params) => apiGet('/finance/payments', params),
-  createPayment: (payload) => apiPost('/finance/payments', payload),
-  updatePayment: (id, payload) => apiPut(`/finance/payments/${id}`, payload),
-  deletePayment: (id) => apiDelete(`/finance/payments/${id}`),
-
-  listFixedAssets: (params) => apiGet('/finance/fixed-assets', params),
-  createFixedAsset: (payload) => apiPost('/finance/fixed-assets', payload),
-  updateFixedAsset: (id, payload) => apiPut(`/finance/fixed-assets/${id}`, payload),
-  deleteFixedAsset: (id) => apiDelete(`/finance/fixed-assets/${id}`),
-
-  createJournalEntry: (payload) => apiPost('/finance/journal-entries', payload),
-  updateJournalEntry: (id, payload) => apiPut(`/finance/journal-entries/${id}`, payload),
-  deleteJournalEntry: (id) => apiDelete(`/finance/journal-entries/${id}`),
+  listExpenses: () => apiGet('/finance/expense_list'),
+  getExpense: (id) => apiGet(`/finance/expense/${id}`),
+  createExpense: (payload) => apiPost('/finance/expense', payload),
+  updateExpense: (id, payload) => apiPut(`/finance/expense/${id}`, payload),
+  deleteExpense: (id) => apiDelete(`/finance/expense/${id}`),
 }
