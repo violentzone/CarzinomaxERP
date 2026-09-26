@@ -1,5 +1,5 @@
 import traceback
-
+from pydantic import BaseModel
 import litellm
 import asyncio
 
@@ -27,12 +27,14 @@ class LlmRouter:
             self.llm_log.error(traceback.format_exc())
             raise LlmException(str(e))
 
+        self.model = settings.LLM_MODEL
+        self.api_base = settings.LLM_API_BASE or None
         self.user_id = user_id
         self.function_called = function_called
         self.user_log = user_log(user_id)
         self.system_log = system_log
         self.llm = settings.LLM_MODEL
-        self.llm_token = settings.LLM_TOKEN
+        self.llm_key = settings.LLM_KEY
 
     @staticmethod
     async def model_check() -> None:
@@ -48,11 +50,10 @@ class LlmRouter:
             if not settings.LLM_API_BASE:
                 raise ValueError('LLM_API_BASE set')
 
-
         # LiteLLM `ahealth_check`
         model_conf = {
             "model": settings.LLM_MODEL,
-            "api_key": settings.LLM_API_KEY,
+            "api_key": settings.LLM_KEY,
             "messages": [{"role": "user", "content": "ping"}],
             "max_tokens": 1,
             "timeout": 30}
@@ -61,3 +62,95 @@ class LlmRouter:
         llm_check_result = await litellm.ahealth_check(model_conf)
         if 'error' in llm_check_result:
             raise RuntimeError(llm_check_result)
+
+    async def chat(self, system_prompt: str, message: list[dict]) -> str:
+        """
+        Chat endpoint of LLM
+        Args:
+            system_prompt: System prompt inject to chat
+            message: Message user send
+
+        Returns:
+            Content (str) of LLM response
+        """
+        self.user_log.info('Chat input:\n' + str(message))
+        request = {
+            "model": self.llm,
+            "api_key": self.llm_key,
+            "messages": [{"role": "system", "content": system_prompt}, *message],
+        }
+        if settings.LLM_TYPE == 'local':
+            request["api_base"] = settings.LLM_API_BASE
+
+        try:
+            response = await litellm.acompletion(**request)
+            content = response.choices[0].message.content or ''
+            self.user_log.info('Chat output:\n' + content)
+            return content
+        except Exception as e:
+            self.user_log.error(traceback.format_exc())
+            raise LlmException(str(e))
+
+    async def stream_chat(self, system_prompt: str, message: list[dict]):
+        """
+        Streaming chat endpoint of LLM
+        Args:
+            system_prompt: System prompt inject to chat
+            message: Message user send
+
+        Yields:
+            Content chunks (str) as they arrive from the LLM
+        """
+        self.user_log.info('Stream chat input:\n' + str(message))
+        request = {
+            "model": self.llm,
+            "api_key": self.llm_key,
+            "messages": [{"role": "system", "content": system_prompt}, *message],
+            "stream": True,
+        }
+        if settings.LLM_TYPE == 'local':
+            request["api_base"] = settings.LLM_API_BASE
+
+        try:
+            response = await litellm.acompletion(**request)
+            full_response = []
+            async for chunk in response:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    full_response.append(delta)
+                    yield delta
+            self.user_log.info('Stream chat output:\n' + ''.join(full_response))
+        except Exception as e:
+            self.user_log.error(traceback.format_exc())
+            raise LlmException(str(e))
+
+    async def parsed_chat(self, system_prompt: str, message: list[dict], response_format: type[BaseModel]) -> dict:
+        """
+        Chat with specific response format
+        Args:
+            system_prompt:System prompt inject to chat
+            message: Message user send
+            response_format: The format BaseModel class
+
+        Returns:
+            Dict contains LLM response, validated against response_format
+        """
+        self.user_log.info('Parsed chat input:\n' + str(message))
+        request = {
+            "model": self.llm,
+            "api_key": self.llm_key,
+            "messages": [{"role": "system", "content": system_prompt}, *message],
+            "response_format": response_format,
+        }
+        if settings.LLM_TYPE == 'local':
+            request["api_base"] = settings.LLM_API_BASE
+
+        try:
+            response = await litellm.acompletion(**request)
+            content = response.choices[0].message.content or ''
+            self.user_log.info('Parsed chat output:\n' + content)
+            parsed = response_format.model_validate_json(content)
+            return parsed.model_dump()
+        except Exception as e:
+            self.user_log.error(traceback.format_exc())
+            raise LlmException(str(e))

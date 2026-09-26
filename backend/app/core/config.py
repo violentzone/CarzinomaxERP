@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     LLM_TYPE: str = "remote"
     LLM_API_BASE = ""
     LLM_MODEL: str = ""
-    LLM_TOKEN: str = ""
+    LLM_KEY: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
