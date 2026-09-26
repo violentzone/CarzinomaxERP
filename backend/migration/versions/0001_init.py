@@ -5,10 +5,14 @@ Revises:
 Create Date: 2026-09-25 16:52:10.768247
 
 """
+from datetime import datetime, timezone
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+
+from app.core.config import settings
+from app.core.security import get_password_hash
 
 
 # revision identifiers, used by Alembic.
@@ -16,6 +20,36 @@ revision: str = '0001'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+def _seed_admin_user() -> None:
+    """Insert the default admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env."""
+    now = datetime.now(timezone.utc)
+    users = sa.table(
+        "users",
+        sa.column("email", sa.String),
+        sa.column("hashed_password", sa.String),
+        sa.column("full_name", sa.String),
+        sa.column("is_active", sa.Boolean),
+        sa.column("has_finance_access", sa.Boolean),
+        sa.column("has_scm_access", sa.Boolean),
+        sa.column("has_hr_access", sa.Boolean),
+        sa.column("has_dev_access", sa.Boolean),
+        sa.column("created_at", sa.DateTime(timezone=True)),
+        sa.column("updated_at", sa.DateTime(timezone=True)),
+    )
+    op.bulk_insert(users, [{
+        "email": settings.ADMIN_EMAIL,
+        "hashed_password": get_password_hash(settings.ADMIN_PASSWORD),
+        "full_name": "System Administrator",
+        "is_active": True,
+        "has_finance_access": True,
+        "has_scm_access": True,
+        "has_hr_access": True,
+        "has_dev_access": True,
+        "created_at": now,
+        "updated_at": now,
+    }])
 
 
 def upgrade() -> None:
@@ -153,6 +187,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_paychecks_id'), 'paychecks', ['id'], unique=False)
     # ### end Alembic commands ###
+    _seed_admin_user()
 
 
 def downgrade() -> None:
