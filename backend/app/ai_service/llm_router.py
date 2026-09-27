@@ -1,9 +1,13 @@
 import traceback
+from typing import TYPE_CHECKING
 from pydantic import BaseModel
 import litellm
 
-from app.core.log_module import user_log
+from app.core.log_module import system_log
 from app.core.config import settings
+
+if TYPE_CHECKING:
+    from langchain_litellm import ChatLiteLLM
 
 
 class LlmException(Exception):
@@ -13,17 +17,12 @@ class LlmException(Exception):
 
 
 class LlmRouter:
-    def __init__(self, user_id: str, function_called: str):
+    def __init__(self):
         """
         Llm Router using Litellm.
         Connection is verified once at app startup via `LlmRouter.model_check()`.
-        Args:
-            user_id: User the requests are logged under
-            function_called: Name of the calling feature, for logging
         """
-        self.user_id = user_id
-        self.function_called = function_called
-        self.user_log = user_log(user_id)
+        self.log = system_log()
         self.llm = settings.LLM_MODEL
         self.llm_key = settings.LLM_KEY
         # None for remote providers so litellm uses the provider's default endpoint
@@ -82,14 +81,14 @@ class LlmRouter:
         Returns:
             Content (str) of LLM response
         """
-        self.user_log.info(f'[{self.function_called}] Chat input:\n' + str(message))
+        self.log.info(f'Chat input:\n' + str(message))
         try:
             response = await litellm.acompletion(**self._request(system_prompt, message))
             content = response.choices[0].message.content or ''
-            self.user_log.info(f'[{self.function_called}] Chat output:\n' + content)
+            self.log.info(f' Chat output:\n' + content)
             return content
         except Exception as e:
-            self.user_log.error(traceback.format_exc())
+            self.log.error(traceback.format_exc())
             raise LlmException(str(e))
 
     async def stream_chat(self, system_prompt: str, message: list[dict]):
@@ -102,7 +101,7 @@ class LlmRouter:
         Yields:
             Content chunks (str) as they arrive from the LLM
         """
-        self.user_log.info(f'[{self.function_called}] Stream chat input:\n' + str(message))
+        self.log.info(f'Stream chat input:\n' + str(message))
         try:
             response = await litellm.acompletion(**self._request(system_prompt, message, stream=True))
             full_response = []
@@ -111,9 +110,9 @@ class LlmRouter:
                 if delta:
                     full_response.append(delta)
                     yield delta
-            self.user_log.info(f'[{self.function_called}] Stream chat output:\n' + ''.join(full_response))
+            self.log.info(f'Stream chat output:\n' + ''.join(full_response))
         except Exception as e:
-            self.user_log.error(traceback.format_exc())
+            self.log.error(traceback.format_exc())
             raise LlmException(str(e))
 
     async def parsed_chat(self, system_prompt: str, message: list[dict], response_format: type[BaseModel]) -> dict:
@@ -127,14 +126,14 @@ class LlmRouter:
         Returns:
             Dict contains LLM response, validated against response_format
         """
-        self.user_log.info(f'[{self.function_called}] Parsed chat input:\n' + str(message))
+        self.log.info(f'Parsed chat input:\n' + str(message))
         try:
             response = await litellm.acompletion(
                 **self._request(system_prompt, message, response_format=response_format))
             content = response.choices[0].message.content or ''
-            self.user_log.info(f'[{self.function_called}] Parsed chat output:\n' + content)
+            self.log.info(f'Parsed chat output:\n' + content)
             parsed = response_format.model_validate_json(content)
             return parsed.model_dump()
         except Exception as e:
-            self.user_log.error(traceback.format_exc())
+            self.log.error(traceback.format_exc())
             raise LlmException(str(e))

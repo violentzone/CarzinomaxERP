@@ -36,4 +36,8 @@ dependencies = [
     "typing-extensions==4.15.0",
     "typing-inspection==0.4.2",
     "uvicorn==0.49.0",
+    "langchain>=1.4.2",
+    "langgraph>=1.2.12",
+    "langchain-litellm>=0.9.0",
+    "langgraph-supervisor>=0.0.31",
 ]
