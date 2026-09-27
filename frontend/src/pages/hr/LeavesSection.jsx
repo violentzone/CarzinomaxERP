@@ -1,179 +1,138 @@
 import { useState } from 'react'
-import { CalendarDays, Pencil, Trash2, X } from 'lucide-react'
+import { CalendarDays, Check, X } from 'lucide-react'
 import { hrApi } from '../../api/hr'
-import { useList } from '../../lib/useList'
-import { useToast } from '../../context/ToastContext'
-import { num, date as fmtDate, today, titleize } from '../../lib/format'
-import Card from '../../components/ui/Card'
-import Button from '../../components/ui/Button'
+import { useAuth } from '../../context/AuthContext'
+import { useUsers } from '../../lib/useUsers'
+import { date as fmtDate, today, titleize, daysBetween, parseDate } from '../../lib/format'
 import Badge from '../../components/ui/Badge'
-import AccessDenied from '../../components/ui/AccessDenied'
-import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import SessionList from '../../components/ui/SessionList'
-import { SchemaForm } from '../../components/SchemaForm'
+import ResourceSection from '../../components/ResourceSection'
+import { Select } from '../../components/ui/Field'
 
 const LEAVE_TYPES = ['annual', 'sick', 'unpaid', 'parental'].map((v) => ({ value: v, label: titleize(v) }))
 const STATUSES = ['pending', 'approved', 'rejected'].map((v) => ({ value: v, label: titleize(v) }))
 
-/** Leave requests are POST-only — created rows are shown in a session list. */
+/** Leave requests with a one-click approve / reject that records the approver. */
 export default function LeavesSection() {
-  const toast = useToast()
-  const { rows: employees, denied } = useList(() => hrApi.listEmployees())
-  const [values, setValues] = useState({ leave_type: 'annual', start_date: today(), end_date: today(), status: 'pending' })
-  const [created, setCreated] = useState([])
-  const [saving, setSaving] = useState(false)
-  const [editingId, setEditingId] = useState(null) // leave request being edited, null = create
-  const [pendingRemove, setPendingRemove] = useState(null)
-  const [removing, setRemoving] = useState(false)
-
-  if (denied) return <AccessDenied module="People & HR" />
-
-  const empMap = Object.fromEntries(
-    (employees || []).map((e) => [String(e.id), `${e.first_name} ${e.last_name}`]),
-  )
-  const employeeOptions = (employees || []).map((e) => ({ value: String(e.id), label: `${e.first_name} ${e.last_name}` }))
+  const { user: me } = useAuth()
+  const { userOptions, nameOf } = useUsers()
+  const [statusFilter, setStatusFilter] = useState('')
 
   const fields = [
-    { key: 'employee_id', label: 'Employee', type: 'select', required: true, options: employeeOptions, placeholder: employeeOptions.length ? 'Select employee…' : 'No employees — add one first', full: true },
-    { key: 'leave_type', label: 'Leave type', type: 'select', options: LEAVE_TYPES, default: 'annual' },
+    {
+      key: 'user_id',
+      label: 'Member',
+      type: 'select',
+      numeric: true,
+      required: true,
+      full: true,
+      options: userOptions,
+      placeholder: userOptions.length ? 'Select a member…' : 'No users — create one first',
+    },
+    { key: 'leave_type', label: 'Leave type', type: 'select', required: true, options: LEAVE_TYPES, default: 'annual' },
     { key: 'status', label: 'Status', type: 'select', options: STATUSES, default: 'pending' },
     { key: 'start_date', label: 'Start date', type: 'date', required: true, default: today() },
     { key: 'end_date', label: 'End date', type: 'date', required: true, default: today() },
     { key: 'reason', label: 'Reason', type: 'textarea', full: true, placeholder: 'Optional note for the approver' },
   ]
 
-  const resetForm = () => {
-    setEditingId(null)
-    setValues({ leave_type: 'annual', start_date: today(), end_date: today(), status: 'pending' })
-  }
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setSaving(true)
+  const decide = async (r, status, { reload, toast }) => {
     try {
-      const payload = {
-        employee_id: num(values.employee_id),
-        leave_type: values.leave_type || 'annual',
-        start_date: values.start_date,
-        end_date: values.end_date,
-        reason: values.reason || (editingId ? null : undefined),
-        status: values.status || 'pending',
-      }
-      if (editingId) {
-        const leave = await hrApi.updateLeave(editingId, payload)
-        setCreated((c) => c.map((l) => (l.id === editingId ? { ...leave } : l)))
-        toast.success('Leave request updated')
-      } else {
-        const leave = await hrApi.createLeave(payload)
-        setCreated((c) => [{ ...leave }, ...c])
-        toast.success('Leave request submitted')
-      }
-      resetForm()
+      await hrApi.updateLeave(r.id, { status, approved_by_id: me?.id })
+      toast.success(`Leave ${status} for ${nameOf(r.user_id)}`)
+      reload()
     } catch (err) {
-      toast.error(err?.detail || (editingId ? 'Could not update leave request' : 'Could not submit leave request'))
-    } finally {
-      setSaving(false)
+      toast.error(err?.detail || 'Could not update leave request')
     }
   }
 
-  const startEdit = (row) => {
-    setEditingId(row.id)
-    setValues({
-      employee_id: String(row.employee_id),
-      leave_type: row.leave_type,
-      start_date: row.start_date,
-      end_date: row.end_date,
-      reason: row.reason ?? '',
-      status: row.status || 'pending',
-    })
-  }
+  const rowsTransform = (rows) =>
+    [...rows]
+      .filter((r) => !statusFilter || r.status === statusFilter)
+      .sort((a, b) => (parseDate(b.start_date) ?? 0) - (parseDate(a.start_date) ?? 0) || b.id - a.id)
 
-  const confirmRemove = async () => {
-    setRemoving(true)
-    try {
-      await hrApi.deleteLeave(pendingRemove.id)
-      setCreated((c) => c.filter((l) => l.id !== pendingRemove.id))
-      if (pendingRemove.id === editingId) resetForm()
-      toast.success('Leave request deleted')
-      setPendingRemove(null)
-    } catch (err) {
-      toast.error(err?.detail || 'Could not delete leave request')
-    } finally {
-      setRemoving(false)
-    }
+  const summary = (rows) => {
+    const count = (s) => rows.filter((r) => r.status === s).length
+    const days = rows
+      .filter((r) => r.status === 'approved')
+      .reduce((s, r) => s + daysBetween(r.start_date, r.end_date), 0)
+    return (
+      <div className="summary-row">
+        <div className={`summary-tile ${count('pending') ? 'accent' : ''}`}>
+          <span className="sum-k">Pending</span>
+          <span className="sum-v">{count('pending')}</span>
+          <span className="sum-hint">awaiting a decision</span>
+        </div>
+        <div className="summary-tile">
+          <span className="sum-k">Approved</span>
+          <span className="sum-v">{count('approved')}</span>
+          <span className="sum-hint">{days} day{days === 1 ? '' : 's'} off in total</span>
+        </div>
+        <div className="summary-tile">
+          <span className="sum-k">Rejected</span>
+          <span className="sum-v">{count('rejected')}</span>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div>
-      <div className="section-toolbar">
-        <div>
-          <h2>{editingId ? `Edit leave request #${editingId}` : 'Request leave'}</h2>
-          <div className="muted">Log time off for an employee and track its approval.</div>
-        </div>
-        {editingId && (
-          <Button variant="outline" icon={X} onClick={resetForm}>
-            Cancel edit
-          </Button>
-        )}
-      </div>
-
-      <Card className="card-pad" style={{ maxWidth: 640 }}>
-        <form onSubmit={submit} className="col gap-4">
-          <SchemaForm fields={fields} values={values} setField={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
-          <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" icon={editingId ? Pencil : CalendarDays} loading={saving}>
-              {editingId ? 'Save changes' : 'Submit request'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <SessionList
-        items={created}
-        title="Leave requests this session"
-        columns={[
-          { key: 'employee', header: 'Employee', render: (r) => empMap[String(r.employee_id)] || `#${r.employee_id}` },
-          { key: 'leave_type', header: 'Type', render: (r) => titleize(r.leave_type) },
-          { key: 'start_date', header: 'Start', render: (r) => fmtDate(r.start_date) },
-          { key: 'end_date', header: 'End', render: (r) => fmtDate(r.end_date) },
-          { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
-          {
-            key: 'actions',
-            header: '',
-            align: 'right',
-            render: (r) => (
-              <span className="row-actions">
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => startEdit(r)}
-                  aria-label="Edit leave request"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn line-remove"
-                  onClick={() => setPendingRemove(r)}
-                  aria-label="Delete leave request"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </span>
-            ),
-          },
-        ]}
-      />
-
-      <ConfirmDialog
-        open={!!pendingRemove}
-        onClose={() => setPendingRemove(null)}
-        onConfirm={confirmRemove}
-        loading={removing}
-        title="Delete leave request"
-        message="This will permanently delete this leave request."
-        hint={pendingRemove ? `${empMap[String(pendingRemove.employee_id)] || `#${pendingRemove.employee_id}`} · ${titleize(pendingRemove.leave_type)} · ${fmtDate(pendingRemove.start_date)} – ${fmtDate(pendingRemove.end_date)}` : undefined}
-      />
-    </div>
+    <ResourceSection
+      title="Leave requests"
+      subtitle="Time off per member, and who approved it."
+      moduleName="People & Payroll"
+      fetcher={() => hrApi.listLeaves()}
+      create={hrApi.createLeave}
+      createLabel="New request"
+      createTitle="New leave request"
+      update={(row, payload) => hrApi.updateLeave(row.id, payload)}
+      updateTitle="Edit leave request"
+      remove={(row) => hrApi.deleteLeave(row.id)}
+      removeLabel="leave request"
+      removeHint={(r) => `${nameOf(r.user_id)} · ${titleize(r.leave_type)} · ${fmtDate(r.start_date)} – ${fmtDate(r.end_date)}`}
+      emptyHint="Log the first leave request for a team member."
+      emptyIcon={CalendarDays}
+      fields={fields}
+      rowsTransform={rowsTransform}
+      summary={summary}
+      toolbarExtra={
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      }
+      rowActions={(r, helpers) =>
+        r.status === 'pending' ? (
+          <>
+            <button type="button" className="icon-btn" title="Approve" aria-label="Approve" onClick={() => decide(r, 'approved', helpers)}>
+              <Check size={15} color="var(--success)" />
+            </button>
+            <button type="button" className="icon-btn" title="Reject" aria-label="Reject" onClick={() => decide(r, 'rejected', helpers)}>
+              <X size={15} color="var(--danger)" />
+            </button>
+          </>
+        ) : null
+      }
+      columns={[
+        { key: 'user_id', header: 'Member', render: (r) => <span className="cell-strong">{nameOf(r.user_id)}</span> },
+        { key: 'leave_type', header: 'Type', render: (r) => <Badge status={r.leave_type} /> },
+        {
+          key: 'dates',
+          header: 'Dates',
+          render: (r) => (
+            <span style={{ whiteSpace: 'nowrap' }}>
+              {fmtDate(r.start_date)} – {fmtDate(r.end_date)}
+            </span>
+          ),
+        },
+        { key: 'days', header: 'Days', align: 'right', render: (r) => <span className="cell-num">{daysBetween(r.start_date, r.end_date)}</span> },
+        { key: 'reason', header: 'Reason', render: (r) => <span className="cell-sub">{r.reason || '—'}</span> },
+        { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
+        { key: 'approved_by_id', header: 'Decided by', render: (r) => <span className="muted">{r.approved_by_id ? nameOf(r.approved_by_id) : '—'}</span> },
+      ]}
+    />
   )
 }

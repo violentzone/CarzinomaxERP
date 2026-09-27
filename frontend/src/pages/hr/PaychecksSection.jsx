@@ -1,219 +1,176 @@
 import { useState } from 'react'
-import { Wallet, Pencil, Trash2, X } from 'lucide-react'
+import { Wallet, CheckCircle2 } from 'lucide-react'
 import { hrApi } from '../../api/hr'
-import { useList } from '../../lib/useList'
-import { useToast } from '../../context/ToastContext'
-import { num, currency, date as fmtDate, today } from '../../lib/format'
-import Card from '../../components/ui/Card'
-import Button from '../../components/ui/Button'
+import { useUsers } from '../../lib/useUsers'
+import { num, currency, date as fmtDate, today, monthBounds, monthKey, parseDate } from '../../lib/format'
 import Badge from '../../components/ui/Badge'
-import AccessDenied from '../../components/ui/AccessDenied'
-import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import SessionList from '../../components/ui/SessionList'
-import { SchemaForm } from '../../components/SchemaForm'
+import ResourceSection from '../../components/ResourceSection'
+import { Select } from '../../components/ui/Field'
 
 const STATUSES = [
   { value: 'draft', label: 'Draft' },
   { value: 'paid', label: 'Paid' },
 ]
 
-/** Paychecks are POST-only — created rows are shown in a session list. */
+/**
+ * Paychecks — one record per member per pay period. Net pay is base +
+ * allowances − deductions; the backend computes it when omitted on create, and
+ * we recompute it on edit unless a value was typed explicitly.
+ */
 export default function PaychecksSection() {
-  const toast = useToast()
-  const { rows: employees, denied } = useList(() => hrApi.listEmployees())
-  const [values, setValues] = useState({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
-  const [created, setCreated] = useState([])
-  const [saving, setSaving] = useState(false)
-  const [editingId, setEditingId] = useState(null) // paycheck being edited, null = create
-  const [pendingRemove, setPendingRemove] = useState(null)
-  const [removing, setRemoving] = useState(false)
-
-  if (denied) return <AccessDenied module="People & HR" />
-
-  const empMap = Object.fromEntries(
-    (employees || []).map((e) => [String(e.id), `${e.first_name} ${e.last_name}`]),
-  )
-  const employeeOptions = (employees || []).map((e) => ({ value: String(e.id), label: `${e.first_name} ${e.last_name}` }))
-
-  const netPay = num(values.base_salary) + num(values.allowances) - num(values.deductions)
+  const { userOptions, nameOf } = useUsers()
+  const [statusFilter, setStatusFilter] = useState('')
+  const [personFilter, setPersonFilter] = useState('')
 
   const fields = [
-    { key: 'employee_id', label: 'Employee', type: 'select', required: true, options: employeeOptions, placeholder: employeeOptions.length ? 'Select employee…' : 'No employees — add one first', full: true },
-    { key: 'pay_period_start', label: 'Period start', type: 'date', required: true, default: today() },
-    { key: 'pay_period_end', label: 'Period end', type: 'date', required: true, default: today() },
+    {
+      key: 'user_id',
+      label: 'Member',
+      type: 'select',
+      numeric: true,
+      required: true,
+      full: true,
+      options: userOptions,
+      placeholder: userOptions.length ? 'Select a member…' : 'No users — create one first',
+    },
+    { key: 'pay_period_start', label: 'Period start', type: 'date', required: true, default: monthBounds().start },
+    { key: 'pay_period_end', label: 'Period end', type: 'date', required: true, default: monthBounds().end },
     { key: 'base_salary', label: 'Base salary', type: 'number', step: '0.01', min: 0, required: true },
-    { key: 'allowances', label: 'Allowances', type: 'number', step: '0.01', min: 0 },
-    { key: 'deductions', label: 'Deductions', type: 'number', step: '0.01', min: 0 },
-    { key: 'payment_date', label: 'Payment date', type: 'date', default: today() },
+    { key: 'allowances', label: 'Allowances', type: 'number', step: '0.01', min: 0, default: 0 },
+    { key: 'deductions', label: 'Deductions', type: 'number', step: '0.01', min: 0, default: 0 },
+    { key: 'net_pay', label: 'Net pay', type: 'number', step: '0.01', hint: 'Leave blank to compute base + allowances − deductions.' },
+    { key: 'payment_date', label: 'Payment date', type: 'date', required: true, default: today() },
     { key: 'status', label: 'Status', type: 'select', options: STATUSES, default: 'draft' },
   ]
 
-  const handleSetField = (k, v) => {
-    setValues((s) => {
-      const next = { ...s, [k]: v }
-      if (k === 'employee_id' && v) {
-        const selectedEmp = (employees || []).find((e) => String(e.id) === String(v))
-        if (selectedEmp && selectedEmp.salary) {
-          next.base_salary = selectedEmp.salary
-        }
-      }
-      return next
-    })
+  /** Keep net_pay consistent when the amounts change and no override was typed. */
+  const preparePayload = (payload, editing, values) => {
+    const typed = values.net_pay !== '' && values.net_pay !== undefined && values.net_pay !== null
+    const base = payload.base_salary ?? num(editing?.base_salary)
+    const allow = payload.allowances ?? num(editing?.allowances)
+    const ded = payload.deductions ?? num(editing?.deductions)
+    if (!typed) payload.net_pay = Math.round((base + allow - ded) * 100) / 100
+    return payload
   }
 
-  const resetForm = () => {
-    setEditingId(null)
-    setValues({ pay_period_start: today(), pay_period_end: today(), payment_date: today(), status: 'draft' })
-  }
+  const rowsTransform = (rows) =>
+    [...rows]
+      .filter((r) => !statusFilter || r.status === statusFilter)
+      .filter((r) => !personFilter || String(r.user_id) === personFilter)
+      .sort((a, b) => (parseDate(b.payment_date) ?? 0) - (parseDate(a.payment_date) ?? 0) || b.id - a.id)
 
-  const submit = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const payload = {
-        employee_id: num(values.employee_id),
-        pay_period_start: values.pay_period_start,
-        pay_period_end: values.pay_period_end,
-        base_salary: num(values.base_salary),
-        allowances: num(values.allowances),
-        deductions: num(values.deductions),
-        payment_date: values.payment_date || (editingId ? null : undefined),
-        status: values.status || 'draft',
-      }
-      if (editingId) {
-        const paycheck = await hrApi.updatePaycheck(editingId, payload)
-        setCreated((c) => c.map((p) => (p.id === editingId ? { ...paycheck } : p)))
-        toast.success('Paycheck updated')
-      } else {
-        const paycheck = await hrApi.createPaycheck(payload)
-        setCreated((c) => [{ ...paycheck }, ...c])
-        toast.success('Paycheck generated')
-      }
-      resetForm()
-    } catch (err) {
-      toast.error(err?.detail || (editingId ? 'Could not update paycheck' : 'Could not generate paycheck'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const startEdit = (row) => {
-    setEditingId(row.id)
-    setValues({
-      employee_id: String(row.employee_id),
-      pay_period_start: row.pay_period_start,
-      pay_period_end: row.pay_period_end,
-      base_salary: row.base_salary,
-      allowances: row.allowances,
-      deductions: row.deductions,
-      payment_date: row.payment_date || '',
-      status: row.status || 'draft',
-    })
-  }
-
-  const confirmRemove = async () => {
-    setRemoving(true)
-    try {
-      await hrApi.deletePaycheck(pendingRemove.id)
-      setCreated((c) => c.filter((p) => p.id !== pendingRemove.id))
-      if (pendingRemove.id === editingId) resetForm()
-      toast.success('Paycheck deleted')
-      setPendingRemove(null)
-    } catch (err) {
-      toast.error(err?.detail || 'Could not delete paycheck')
-    } finally {
-      setRemoving(false)
-    }
+  const summary = (rows) => {
+    const paid = rows.filter((r) => r.status === 'paid')
+    const draft = rows.filter((r) => r.status !== 'paid')
+    const thisMonth = monthKey(today())
+    const monthTotal = rows
+      .filter((r) => monthKey(r.payment_date) === thisMonth)
+      .reduce((s, r) => s + num(r.net_pay), 0)
+    return (
+      <div className="summary-row">
+        <div className="summary-tile accent">
+          <span className="sum-k">Paid out</span>
+          <span className="sum-v">{currency(paid.reduce((s, r) => s + num(r.net_pay), 0))}</span>
+          <span className="sum-hint">{paid.length} paycheck{paid.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="summary-tile">
+          <span className="sum-k">Awaiting payment</span>
+          <span className="sum-v">{currency(draft.reduce((s, r) => s + num(r.net_pay), 0))}</span>
+          <span className="sum-hint">{draft.length} draft{draft.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="summary-tile">
+          <span className="sum-k">This month</span>
+          <span className="sum-v">{currency(monthTotal)}</span>
+          <span className="sum-hint">by payment date</span>
+        </div>
+        <div className="summary-tile">
+          <span className="sum-k">People paid</span>
+          <span className="sum-v">{new Set(rows.map((r) => r.user_id)).size}</span>
+          <span className="sum-hint">distinct members</span>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div>
-      <div className="section-toolbar">
-        <div>
-          <h2>{editingId ? `Edit paycheck #${editingId}` : 'Generate paycheck'}</h2>
-          <div className="muted">Net pay is base salary plus allowances, less deductions.</div>
-        </div>
-        {editingId && (
-          <Button variant="outline" icon={X} onClick={resetForm}>
-            Cancel edit
-          </Button>
-        )}
-      </div>
-
-      <Card className="card-pad" style={{ maxWidth: 640 }}>
-        <form onSubmit={submit} className="col gap-4">
-          <SchemaForm fields={fields} values={values} setField={handleSetField} />
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderRadius: 12,
-              background: 'var(--surface-2)',
-              border: '1px solid var(--accent-border, rgba(170, 59, 255, 0.35))',
+    <ResourceSection
+      title="Paychecks"
+      subtitle="Every payment made to an individual member, by pay period."
+      moduleName="People & Payroll"
+      fetcher={() => hrApi.listPaychecks()}
+      create={hrApi.createPaycheck}
+      createLabel="New paycheck"
+      createTitle="New paycheck"
+      update={(row, payload) => hrApi.updatePaycheck(row.id, payload)}
+      updateTitle="Edit paycheck"
+      remove={(row) => hrApi.deletePaycheck(row.id)}
+      removeLabel="paycheck"
+      removeHint={(r) => `${nameOf(r.user_id)} · ${fmtDate(r.payment_date)} · net ${currency(r.net_pay)}`}
+      emptyHint="Record the first payment to a team member."
+      emptyIcon={Wallet}
+      fields={fields}
+      preparePayload={preparePayload}
+      rowsTransform={rowsTransform}
+      summary={summary}
+      toolbarExtra={
+        <>
+          <Select value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} aria-label="Filter by member">
+            <option value="">All members</option>
+            {userOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
+        </>
+      }
+      rowActions={(r, { reload, toast }) =>
+        r.status !== 'paid' ? (
+          <button
+            type="button"
+            className="icon-btn"
+            title="Mark as paid"
+            aria-label="Mark as paid"
+            onClick={async () => {
+              try {
+                await hrApi.updatePaycheck(r.id, { status: 'paid' })
+                toast.success(`Paycheck for ${nameOf(r.user_id)} marked paid`)
+                reload()
+              } catch (err) {
+                toast.error(err?.detail || 'Could not update paycheck')
+              }
             }}
           >
-            <span className="sum-k">Net pay</span>
-            <span className="sum-v" style={{ fontSize: '1.05rem' }}>{currency(netPay)}</span>
-          </div>
-
-          <div className="row" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" icon={editingId ? Pencil : Wallet} loading={saving}>
-              {editingId ? 'Save changes' : 'Generate paycheck'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <SessionList
-        items={created}
-        title="Paychecks generated this session"
-        columns={[
-          { key: 'employee', header: 'Employee', render: (r) => empMap[String(r.employee_id)] || `#${r.employee_id}` },
-          { key: 'pay_period_start', header: 'Period start', render: (r) => fmtDate(r.pay_period_start) },
-          { key: 'pay_period_end', header: 'Period end', render: (r) => fmtDate(r.pay_period_end) },
-          { key: 'base_salary', header: 'Base', align: 'right', render: (r) => <span className="cell-num">{currency(r.base_salary)}</span> },
-          { key: 'net_pay', header: 'Net pay', align: 'right', render: (r) => <span className="cell-num">{currency(r.net_pay)}</span> },
-          { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
-          {
-            key: 'actions',
-            header: '',
-            align: 'right',
-            render: (r) => (
-              <span className="row-actions">
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => startEdit(r)}
-                  aria-label="Edit paycheck"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn line-remove"
-                  onClick={() => setPendingRemove(r)}
-                  aria-label="Delete paycheck"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </span>
-            ),
-          },
-        ]}
-      />
-
-      <ConfirmDialog
-        open={!!pendingRemove}
-        onClose={() => setPendingRemove(null)}
-        onConfirm={confirmRemove}
-        loading={removing}
-        title="Delete paycheck"
-        message="This will permanently delete this paycheck."
-        hint={pendingRemove ? `${empMap[String(pendingRemove.employee_id)] || `#${pendingRemove.employee_id}`} · net pay ${currency(pendingRemove.net_pay)}` : undefined}
-      />
-    </div>
+            <CheckCircle2 size={15} color="var(--success)" />
+          </button>
+        ) : null
+      }
+      columns={[
+        { key: 'user_id', header: 'Member', render: (r) => <span className="cell-strong">{nameOf(r.user_id)}</span> },
+        {
+          key: 'period',
+          header: 'Pay period',
+          render: (r) => (
+            <span className="muted" style={{ whiteSpace: 'nowrap' }}>
+              {fmtDate(r.pay_period_start)} – {fmtDate(r.pay_period_end)}
+            </span>
+          ),
+        },
+        { key: 'base_salary', header: 'Base', align: 'right', render: (r) => <span className="cell-num">{currency(r.base_salary)}</span> },
+        { key: 'allowances', header: 'Allowances', align: 'right', render: (r) => <span className="cell-num muted">{currency(r.allowances)}</span> },
+        { key: 'deductions', header: 'Deductions', align: 'right', render: (r) => <span className="cell-num muted">{num(r.deductions) ? `−${currency(r.deductions)}` : '—'}</span> },
+        { key: 'net_pay', header: 'Net pay', align: 'right', render: (r) => <span className="cell-num cell-strong">{currency(r.net_pay)}</span> },
+        { key: 'payment_date', header: 'Paid on', className: 'nowrap', render: (r) => fmtDate(r.payment_date) },
+        { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
+      ]}
+    />
   )
 }
