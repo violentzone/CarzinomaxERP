@@ -8,7 +8,7 @@ This document provides system setup commands, build/run instructions, detailed p
 
 ### 1. Security & RBAC
 * Seeded Administrator account creation on startup.
-* Route-based role validation (`"admin"`, `"finance"`, `"hr"`, `"scm"`).
+* Route-based access validation: module routers check the `has_*_access` flags (`"finance"`, `"scm"`, `"hr"`, `"developer"`); user management requires the `administration` department. No department bypasses a module gate.
 * JWT session issuance.
 
 ### 2. Finance Module ([models/finance.py](file:///D:/python/server1/carzinomaxERP/backend/app/models/finance.py))
@@ -54,7 +54,7 @@ carzinomaxERP/
 │   │   │   ├── scheduler.py             # Monthly salary background scheduler
 │   │   │   └── security.py              # JWT token and hashing utilities
 │   │   ├── models/                      # SQLAlchemy models
-│   │   │   ├── auth.py                  # User/Role model
+│   │   │   ├── auth.py                  # User/UserDepartment model
 │   │   │   ├── dev_tracking.py          # Dev metrics models
 │   │   │   ├── finance.py               # Accounting models
 │   │   │   ├── hr.py                    # Payroll/Personnel models
@@ -137,4 +137,4 @@ The frontend is built with React, Vite, and CSS.
 * Use async database sessions (`AsyncSession`) with SQLAlchemy 2.0 type mapping conventions ([Base](file:///D:/python/server1/carzinomaxERP/backend/app/core/database.py#L23) class).
 * Validate payloads using **Pydantic v2** schemas in [backend/app/schemas/](file:///D:/python/server1/carzinomaxERP/backend/app/schemas/).
 * Use `system_log()` and `user_log()` from [log_module.py](file:///D:/python/server1/carzinomaxERP/backend/app/core/log_module.py) for all logging. Avoid using standard python `print`.
-* Protect route groups using the role checker dependency: `APIRouter(dependencies=[Depends(RoleChecker(["role_name"]))])`.
+* Protect route groups using the role checker dependency: `APIRouter(dependencies=[Depends(RoleChecker(["finance"]))])`.
