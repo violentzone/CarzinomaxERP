@@ -1,6 +1,226 @@
 from langchain.tools import tool
+from pydantic import BaseModel
+from sqlalchemy import select
+from datetime import datetime, date as date_type
+from typing import Literal
+from uuid import UUID
 
+from app.core.database import SessionLocal
+from app.models.auth import User
+from app.models.dev_tracking import DevInvestment, DevProject
+from app.models.finance import ExpenseType, Finance
+
+
+class GetUserOutput(BaseModel):
+    full_name: str | None
+    email: str
+    is_active: bool
+    has_finance_access: bool
+    has_scm_access: bool
+    has_hr_access: bool
+    has_dev_access: bool
 
 @tool
-def create_user(user_id: int):
-    pass
+async def get_user_info(
+    user_id: int,
+    target_user_id: int | None = None,
+    target_user_name: str | None = None,
+) -> GetUserOutput | None:
+    """
+    Gets user information with the permission of user_id, from database table "user", filtered by parameters that is not None
+    Args:
+        user_id: User who call this tool
+        target_user_id: Target user ID to query, None if not filter by ID
+        target_user_name: Target username, None if not filter by name
+
+    Returns:
+        User information, None if no User fits condition
+    """
+    stmt = select(User)
+    if target_user_id is not None:
+        stmt = stmt.where(User.id == target_user_id)
+    if target_user_name is not None:
+        stmt = stmt.where(User.full_name == target_user_name)
+
+    async with SessionLocal() as session:
+        user = (await session.execute(stmt)).scalar_one_or_none()
+
+    if user is None:
+        return None
+    return GetUserOutput.model_validate(user, from_attributes=True)
+
+class ExpenseDetail(BaseModel):
+    id: UUID
+    expense_type: ExpenseType
+    amount: float
+    created_at: datetime
+    updated_at: datetime
+
+class GetExpensesOutput(BaseModel):
+    expense_detail: list[ExpenseDetail]
+    total: float
+
+@tool
+async def get_expenses(
+    user_id: int,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    expense_type: Literal["paycheck", "petty_cash", "investment", "other"] | None = None,
+) -> GetExpensesOutput | None:
+    """
+    Get expenses data with the permission of user_id, from database table "finance", filtered by parameters that is not None
+    Args:
+        user_id: User who call this tool
+        start_date: Start period to query expenses (inclusive, by created_at), None if not filter by start date
+        end_date: End period to query expenses (inclusive, by created_at), None if not filter by end date
+        expense_type: Specify which type of expenses to filter by, None if not filter by type
+
+    Returns:
+        Expenses data, each expense listed in `GetExpensesOutput.expense_detail` with summed amount in `total`, None if no expenses found with filter given
+    """
+    stmt = select(Finance)
+    if start_date is not None:
+        stmt = stmt.where(Finance.created_at >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Finance.created_at <= end_date)
+    if expense_type is not None:
+        stmt = stmt.where(Finance.expense_type == ExpenseType(expense_type))
+
+    async with SessionLocal() as session:
+        expenses = (await session.execute(stmt)).scalars().all()
+
+    if not expenses:
+        return None
+    total = float(sum(e.amount for e in expenses))
+    return GetExpensesOutput(
+        expense_detail=[ExpenseDetail.model_validate(e, from_attributes=True) for e in expenses],
+        total=total,
+    )
+
+@tool
+async def create_expense(
+    user_id: int,
+    expense_type: Literal["paycheck", "petty_cash", "investment", "other"],
+    amount: float,
+) -> ExpenseDetail:
+    """
+    Creates a new expense record with the permission of user_id, into database table "finance"
+    Args:
+        user_id: User who call this tool
+        expense_type: Type of the expense to create
+        amount: Amount of the expense to create
+
+    Returns:
+        The created expense record
+    """
+    expense = Finance(expense_type=ExpenseType(expense_type), amount=amount)
+
+    async with SessionLocal() as session:
+        session.add(expense)
+        await session.commit()
+        await session.refresh(expense)
+
+    return ExpenseDetail.model_validate(expense, from_attributes=True)
+
+class DevProjectDetail(BaseModel):
+    project_id: int
+    project_name: str
+    project_description: str | None
+    created_at: datetime
+    updated_at: datetime
+
+class GetDevProjectOutput(BaseModel):
+    project_detail: list[DevProjectDetail]
+    total: int
+
+@tool
+async def get_dev_project(
+    user_id: int,
+    project_id: int | None = None,
+    project_name: str | None = None,
+) -> GetDevProjectOutput | None:
+    """
+    Gets dev project information with the permission of user_id, from database table "dev_projects", filtered by parameters that is not None
+    Args:
+        user_id: User who call this tool
+        project_id: Target project ID to query, None if not filter by ID
+        project_name: Target project name to query, None if not filter by name
+
+    Returns:
+        Dev project data, each project listed in `GetDevProjectOutput.project_detail` with count in `total`, None if no project fits condition
+    """
+    stmt = select(DevProject)
+    if project_id is not None:
+        stmt = stmt.where(DevProject.project_id == project_id)
+    if project_name is not None:
+        stmt = stmt.where(DevProject.project_name == project_name)
+
+    async with SessionLocal() as session:
+        projects = (await session.execute(stmt)).scalars().all()
+
+    if not projects:
+        return None
+    return GetDevProjectOutput(
+        project_detail=[DevProjectDetail.model_validate(p, from_attributes=True) for p in projects],
+        total=len(projects),
+    )
+
+class DevInvestmentDetail(BaseModel):
+    id: int
+    date: date_type
+    project_id: int
+    amount: float
+    vendor: str
+    category: str
+    description: str | None
+    created_at: datetime
+    updated_at: datetime
+
+class GetDevInvestmentOutput(BaseModel):
+    investment_detail: list[DevInvestmentDetail]
+    total: float
+
+@tool
+async def get_dev_investment(
+    user_id: int,
+    project_id: int | None = None,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+    vendor: str | None = None,
+    category: str | None = None,
+) -> GetDevInvestmentOutput | None:
+    """
+    Gets dev investment data with the permission of user_id, from database table "dev_investments", filtered by parameters that is not None
+    Args:
+        user_id: User who call this tool
+        project_id: Project ID the investments belong to, None if not filter by project
+        start_date: Start period to query investments (inclusive, by date), None if not filter by start date
+        end_date: End period to query investments (inclusive, by date), None if not filter by end date
+        vendor: Vendor of the investments (e.g. AWS, GCP, Vercel), None if not filter by vendor
+        category: Category of the investments (e.g. cloud, software_licenses, hardware, consulting), None if not filter by category
+
+    Returns:
+        Dev investment data, each investment listed in `GetDevInvestmentOutput.investment_detail` with summed amount in `total`, None if no investments found with filter given
+    """
+    stmt = select(DevInvestment)
+    if project_id is not None:
+        stmt = stmt.where(DevInvestment.project_id == project_id)
+    if start_date is not None:
+        stmt = stmt.where(DevInvestment.date >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(DevInvestment.date <= end_date)
+    if vendor is not None:
+        stmt = stmt.where(DevInvestment.vendor == vendor)
+    if category is not None:
+        stmt = stmt.where(DevInvestment.category == category)
+
+    async with SessionLocal() as session:
+        investments = (await session.execute(stmt)).scalars().all()
+
+    if not investments:
+        return None
+    total = float(sum(i.amount for i in investments))
+    return GetDevInvestmentOutput(
+        investment_detail=[DevInvestmentDetail.model_validate(i, from_attributes=True) for i in investments],
+        total=total,
+    )

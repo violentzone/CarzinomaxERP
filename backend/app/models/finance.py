@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Boolean, Uuid, Enum
+from sqlalchemy import String, Boolean, Uuid, Enum, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid import UUID, uuid4
 
@@ -28,3 +28,4 @@ class Finance(Base, TimestampMixin):
         ),
         nullable=False,
     )
+    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)

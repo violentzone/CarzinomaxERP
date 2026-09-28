@@ -77,6 +77,7 @@ def upgrade() -> None:
     op.create_table('finance',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('expense_type', sa.Enum('paycheck', 'petty_cash', 'investment', 'other', name='expensetype', native_enum=False, create_constraint=True, length=32), nullable=False),
+    sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
