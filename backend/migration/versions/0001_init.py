@@ -131,7 +131,7 @@ def upgrade() -> None:
     sa.Column('date', sa.Date(), nullable=False),
     sa.Column('project_id', sa.Integer(), nullable=False),
     sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('vendor', sa.String(length=255), nullable=False),
+    sa.Column('vendor', sa.String(length=255), nullable=True),
     sa.Column('category', sa.String(length=100), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),

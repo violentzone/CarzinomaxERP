@@ -9,6 +9,7 @@ from app.core.database import SessionLocal
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject
 from app.models.finance import ExpenseType, Finance
+from app.models.hr import AttendanceLog
 
 
 class GetUserOutput(BaseModel):
@@ -170,7 +171,7 @@ class DevInvestmentDetail(BaseModel):
     date: date_type
     project_id: int
     amount: float
-    vendor: str
+    vendor: str | None
     category: str
     description: str | None
     created_at: datetime
@@ -223,4 +224,50 @@ async def get_dev_investment(
     return GetDevInvestmentOutput(
         investment_detail=[DevInvestmentDetail.model_validate(i, from_attributes=True) for i in investments],
         total=total,
+    )
+
+class UserAttendanceDetail(BaseModel):
+    user_id: int
+    date: date_type
+    clocked_in: datetime
+    clocked_out: datetime
+    hours: float
+
+class GetAttendanceOutput(BaseModel):
+    user_detail: list[UserAttendanceDetail]
+    total_hours: float
+
+@tool
+async def get_attendance(user_id: int, start_date: datetime, end_date: datetime) -> GetAttendanceOutput:
+    """
+    Get all attendance log in provided duration
+    Args:
+        user_id:  User who call this tool
+        start_date: Start period to query attendance (inclusive, by date)
+        end_date:  End period to query attendance (inclusive, by date)
+
+    Returns:
+        Attendance log of all users in provided duration, each user/day data listed in `GetAttendanceOutput.user_detail`
+    """
+    stmt = select(AttendanceLog)
+    stmt = stmt.where(AttendanceLog.date >= start_date.date())
+    stmt = stmt.where(AttendanceLog.date <= end_date.date())
+    stmt = stmt.where(AttendanceLog.clock_out.is_not(None))
+
+    async with SessionLocal() as session:
+        logs = (await session.execute(stmt)).scalars().all()
+
+    user_detail = [
+        UserAttendanceDetail(
+            user_id=a.user_id,
+            date=a.date,
+            clocked_in=a.clock_in,
+            clocked_out=a.clock_out,
+            hours=float(a.total_hours) if a.total_hours is not None else (a.clock_out - a.clock_in).total_seconds() / 3600,
+        )
+        for a in logs
+    ]
+    return GetAttendanceOutput(
+        user_detail=user_detail,
+        total_hours=sum(d.hours for d in user_detail),
     )

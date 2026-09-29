@@ -251,7 +251,7 @@ async def get_investment(investment_id: int, current_user: User = Depends(get_cu
 class CreateInvestment(BaseModel):
     project_id: int
     amount: Decimal
-    vendor: str
+    vendor: str | None = None
     category: str | None = "cloud"
     description: str | None = None
     date: date_type

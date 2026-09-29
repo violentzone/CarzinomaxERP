@@ -22,11 +22,6 @@ def load_prompt(name: str) -> str:
 llm = ChatLiteLLM(model=settings.LLM_MODEL, api_key=settings.LLM_KEY or None,
                   api_base=settings.LLM_API_BASE if settings.LLM_TYPE == 'local' else None)
 
-ORCHESTRATOR_SYSTEM_PROMPT = load_prompt('orchestrator_prompt.md')
-
-
-
-
-orchestrator = create_supervisor(model=llm, prompt=ORCHESTRATOR_SYSTEM_PROMPT)
+#
 
 
