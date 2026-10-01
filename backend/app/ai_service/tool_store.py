@@ -12,43 +12,64 @@ from app.models.finance import ExpenseType, Finance
 from app.models.hr import AttendanceLog
 
 
+class UserInfo(BaseModel):
+    id: int | None = None
+    full_name: str | None = None
+    email: str | None = None
+    is_active: bool | None = None
+    has_finance_access: bool | None = None
+    has_scm_access: bool | None = None
+    has_hr_access: bool | None = None
+    has_dev_access: bool | None = None
+
 class GetUserOutput(BaseModel):
-    full_name: str | None
-    email: str
-    is_active: bool
-    has_finance_access: bool
-    has_scm_access: bool
-    has_hr_access: bool
-    has_dev_access: bool
+    data: list[UserInfo] = []
+    message: str | None = None
 
 @tool
 async def get_user_info(
     user_id: int,
     target_user_id: int | None = None,
     target_user_name: str | None = None,
-) -> GetUserOutput | None:
+    has_finance_access: bool | None = None,
+    has_scm_access: bool | None = None,
+    has_hr_access: bool | None = None,
+    has_dev_access: bool | None = None,
+) -> GetUserOutput:
     """
     Gets user information with the permission of user_id, from database table "user", filtered by parameters that is not None
     Args:
         user_id: User who call this tool
         target_user_id: Target user ID to query, None if not filter by ID
         target_user_name: Target username, None if not filter by name
+        has_finance_access: Filter user with finance access, None if do not want to filter by finance access
+        has_scm_access: Filter user with SCM access, None if do not want to filter by SCM access
+        has_hr_access: Filter user with HR access, None if do not want to filter by HR access
+        has_dev_access: Filter user with dev access, None if do not want to filter by dev access
 
     Returns:
-        User information, None if no User fits condition
+        Every user that fits the condition listed in `GetUserOutput.data`, all users if no filter given, empty list with the reason in `message` if no user fits
     """
     stmt = select(User)
     if target_user_id is not None:
         stmt = stmt.where(User.id == target_user_id)
     if target_user_name is not None:
         stmt = stmt.where(User.full_name == target_user_name)
+    if has_finance_access is not None:
+        stmt = stmt.where(User.has_finance_access == has_finance_access)
+    if has_scm_access is not None:
+        stmt = stmt.where(User.has_scm_access == has_scm_access)
+    if has_hr_access is not None:
+        stmt = stmt.where(User.has_hr_access == has_hr_access)
+    if has_dev_access is not None:
+        stmt = stmt.where(User.has_dev_access == has_dev_access)
 
     async with SessionLocal() as session:
-        user = (await session.execute(stmt)).scalar_one_or_none()
+        users = (await session.execute(stmt)).scalars().all()
 
-    if user is None:
-        return None
-    return GetUserOutput.model_validate(user, from_attributes=True)
+    if not users:
+        return GetUserOutput(data=[], message='No user fits the condition')
+    return GetUserOutput(data=[UserInfo.model_validate(u, from_attributes=True) for u in users])
 
 class ExpenseDetail(BaseModel):
     id: UUID
