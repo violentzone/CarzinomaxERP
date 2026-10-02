@@ -22,7 +22,7 @@ class DevInvestment(Base, TimestampMixin):
     date: Mapped[date] = mapped_column(Date, nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    vendor: Mapped[str] = mapped_column(String(255), nullable=False)  # AWS, GCP, Vercel, etc.
+    vendor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # AWS, GCP, Vercel, etc.
     category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

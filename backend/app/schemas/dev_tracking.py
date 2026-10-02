@@ -7,7 +7,7 @@ from decimal import Decimal
 class DevInvestmentBase(BaseModel):
     date: date
     amount: Decimal
-    vendor: str
+    vendor: Optional[str] = None
     category: str = "cloud"
     description: Optional[str] = None
 

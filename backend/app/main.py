@@ -12,7 +12,6 @@ from app.models.auth import User
 from app.api.v1 import api_router
 from app.core.log_module import system_log
 from app.core.scheduler import start_scheduler, shutdown_scheduler
-from app.ai_service import LlmRouter
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
