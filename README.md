@@ -108,7 +108,7 @@ cd CarzinomaxERP/backend
 # Configure — copy the example and fill in your values
 cp .env.example .env
 #   ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
-#   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_KEY / LLM_API_BASE
+#   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
 
 # Install dependencies
 uv sync
@@ -148,13 +148,13 @@ is needed in development. Sign in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` from
 # Hosted provider
 LLM_TYPE="remote"
 LLM_MODEL="anthropic/claude-sonnet-5"      # or openai/gpt-5, gemini/gemini-2.5-pro, ...
-LLM_KEY="sk-..."
+LLM_API_KEY="sk-..."
 
 # Self-hosted (Ollama, vLLM, LM Studio, any OpenAI-compatible server)
 LLM_TYPE="local"
 LLM_MODEL="ollama/llama3"                  # or openai/<model> for OpenAI-compatible servers
 LLM_API_BASE="http://127.0.0.1:11434"
-LLM_KEY=""                                 # some local servers want a dummy value
+LLM_API_KEY=""                             # some local servers want a dummy value
 ```
 
 ## 📁 Project structure

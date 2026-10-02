@@ -24,7 +24,7 @@ class LlmRouter:
         """
         self.log = system_log()
         self.llm = settings.LLM_MODEL
-        self.llm_key = settings.LLM_KEY
+        self.llm_api_key = settings.LLM_API_KEY
         # None for remote providers so litellm uses the provider's default endpoint
         self.api_base = settings.LLM_API_BASE if settings.LLM_TYPE == 'local' else None
 
@@ -46,7 +46,7 @@ class LlmRouter:
         # (litellm.ahealth_check is proxy-oriented and pulls in extra dependencies.)
         await litellm.acompletion(
             model=settings.LLM_MODEL,
-            api_key=settings.LLM_KEY,
+            api_key=settings.LLM_API_KEY,
             api_base=settings.LLM_API_BASE if settings.LLM_TYPE == 'local' else None,
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=1,
@@ -65,7 +65,7 @@ class LlmRouter:
         """
         return {
             "model": self.llm,
-            "api_key": self.llm_key,
+            "api_key": self.llm_api_key,
             "api_base": self.api_base,
             "messages": [{"role": "system", "content": system_prompt}, *message],
             **extra,
