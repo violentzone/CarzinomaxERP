@@ -1,69 +1,63 @@
-"""
-Chatbot module, health check for the agent LLM backend.
-"""
-from time import perf_counter
-from traceback import format_exc
-
+import json
+import traceback
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse as Response
-from langchain_core.messages import AIMessage, HumanMessage
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette import status
+from datetime import datetime
 
-from app.ai_service.agents import llm
-from app.api.common import get_current_user
-from app.core.config import settings
+from app.ai_service.agents import llm, orchestrator
 from app.core.log_module import user_log
-from app.models import User
+from app.models.auth import User
+from app.api.common import get_current_user
 
-chatbot_router = APIRouter(prefix="/chatbot", tags=["Chatbot"])
+
+chatbot_router = APIRouter(prefix='/chatbot', tags=['Chatbot'])
 
 
-@chatbot_router.get('/health_check')
-async def health_check(current_user: User = Depends(get_current_user)):
+@chatbot_router.post('/', status_code=status.HTTP_200_OK)
+async def health_check(user_id: int):
+    log = user_log(user_id)
+    start_time = datetime.now()
+    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} checks chatbot health')
+    try:
+        await llm.ainvoke('ping', max_tokens=1, timeout=10)
+        response = JSONResponse(content={'live': True, 'message': ''})
+        response_time = datetime.now()
+        duration = response_time - start_time
+        log.info(f'Chatbot is alive, response duration: {str(duration)}')
+    except Exception as e:
+        response = JSONResponse(content={'live': False, 'message': 'LLM agent is not responding, make sure all settings in system env is correct'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        log.error(f'Error: {traceback.format_exc()}')
+    return response
+
+@chatbot_router.post('/chatbox/{user_id}', status_code=status.HTTP_200_OK)
+async def chatbox(user_id: int, input_message: str, current_user: User = Depends(get_current_user)):
     """
-    Ping the configured LLM with a one-token request and verify the reply.
+    Webpage agent call this endpoint
     Args:
-        current_user: Signed in user
+        user_id: User id sends message to chatbox
+        input_message: Text user input
+        current_user: Current user sends message to chatbox
 
     Returns:
-        `{"status": "success", "data": {...}}` with model, latency and token usage when the LLM
-        answers, or `{"status": "fail", "error": "..."}` with 503 when it does not.
+        Response of orchestrator agent's last message
     """
-    log = user_log(current_user.id)
-    log.info(f'Chatbot health check against {settings.LLM_MODEL}')
-    started = perf_counter()
-    try:
-        reply = await llm.ainvoke([HumanMessage(content='ping')], max_tokens=1)
-    except Exception as e:
-        log.error(f'Chatbot health check failed: {e}\n{format_exc()}')
-        return Response({"status": "fail", "error": f"LLM unreachable: {e}"},
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, media_type='application/json')
-    latency_ms = round((perf_counter() - started) * 1000)
 
-    checks = {}
-    if not isinstance(reply, AIMessage):
-        checks['unexpected_reply_type'] = type(reply).__name__
-    usage = reply.usage_metadata or {}
-    output_tokens = usage.get('output_tokens')
-    if output_tokens is None:
-        checks['missing_usage_metadata'] = 'provider returned no token usage'
-    elif output_tokens > 1:
-        checks['max_tokens_ignored'] = f'requested 1 output token, provider returned {output_tokens}'
-    if output_tokens == 0 and not (reply.content or '').strip():
-        checks['empty_reply'] = 'provider returned no tokens and no content'
+    log = user_log(user_id)
+    start_time = datetime.now()
+    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {input_message}')
+    formatted_user_input = {'messages':[{
+        'role': 'user', 'content': input_message
+    }]}
 
-    data = {
-        'model': settings.LLM_MODEL,
-        'llm_type': settings.LLM_TYPE,
-        'latency_ms': latency_ms,
-        'max_tokens': 1,
-        'output_tokens': output_tokens,
-        'input_tokens': usage.get('input_tokens'),
-        'reply': reply.content if isinstance(reply.content, str) else str(reply.content),
-    }
-    if checks:
-        log.warning(f'Chatbot health check degraded: {checks}')
-        return Response({"status": "fail", "error": "LLM answered but failed checks", "data": data, "checks": checks},
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, media_type='application/json')
-    log.info(f'Chatbot health check ok in {latency_ms} ms')
-    return Response({"status": "success", "data": data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    async def stream_reply():
+        try:
+            async for chunk, _metadata in orchestrator.astream(formatted_user_input, stream_mode='messages'):
+                yield json.dumps({'type': 'token', 'content': chunk.content}) + '\n'
+            yield json.dumps({'type': 'done'}) + '\n'
+            log.info(f'Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
+        except Exception:
+            log.error(f'Error: {traceback.format_exc()}')
+            yield json.dumps({'type': 'error', 'message': 'Error when try to send to LLM'}) + '\n'
+
+    return StreamingResponse(stream_reply(), media_type='application/x-ndjson')
