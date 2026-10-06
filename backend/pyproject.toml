@@ -40,4 +40,5 @@ dependencies = [
     "langgraph>=1.2.12",
     "langchain-litellm>=0.9.0",
     "langgraph-supervisor>=0.0.31",
+    "psycopg[binary]>=3.3.6",
 ]

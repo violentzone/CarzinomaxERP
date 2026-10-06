@@ -8,10 +8,13 @@ from datetime import datetime
 from app.ai_service.agents import llm, orchestrator
 from app.core.log_module import user_log
 from app.models.auth import User
+from app.schemas.chatbot import ChatboxRequest
 from app.api.common import get_current_user
 
 
 chatbot_router = APIRouter(prefix='/chatbot', tags=['Chatbot'])
+
+MAX_HISTORY_MESSAGES = 10  # 5 turns: 5 user + 5 assistant messages
 
 
 @chatbot_router.post('/', status_code=status.HTTP_200_OK)
@@ -30,29 +33,30 @@ async def health_check(user_id: int):
         log.error(f'Error: {traceback.format_exc()}')
     return response
 
-@chatbot_router.post('/chatbox/{user_id}', status_code=status.HTTP_200_OK)
-async def chatbox(user_id: int, input_message: str, current_user: User = Depends(get_current_user)):
+@chatbot_router.post('/chatbox', status_code=status.HTTP_200_OK)
+async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_current_user)):
     """
     Webpage agent call this endpoint
     Args:
-        user_id: User id sends message to chatbox
-        input_message: Text user input
+        payload: New user message plus prior turns; only the last MAX_HISTORY_MESSAGES are kept
         current_user: Current user sends message to chatbox
 
     Returns:
-        Response of orchestrator agent's last message
+        NDJSON stream of the orchestrator agent's reply tokens
     """
 
-    log = user_log(user_id)
+    log = user_log(str(current_user.id))
     start_time = datetime.now()
-    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {input_message}')
-    formatted_user_input = {'messages':[{
-        'role': 'user', 'content': input_message
-    }]}
+    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message}')
+    history = [m.model_dump() for m in payload.history[-MAX_HISTORY_MESSAGES:]]
+    formatted_user_input = {'messages': history + [{'role': 'user', 'content': payload.message}]}
 
     async def stream_reply():
         try:
-            async for chunk, _metadata in orchestrator.astream(formatted_user_input, stream_mode='messages'):
+            async for chunk, metadata in orchestrator.astream(formatted_user_input, stream_mode='messages'):
+                # Only the orchestrator's own model tokens; skip tool results from the tools node
+                if metadata.get('langgraph_node') != 'model' or not chunk.content:
+                    continue
                 yield json.dumps({'type': 'token', 'content': chunk.content}) + '\n'
             yield json.dumps({'type': 'done'}) + '\n'
             log.info(f'Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
