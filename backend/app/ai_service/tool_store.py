@@ -5,7 +5,7 @@ from datetime import datetime, date as date_type
 from typing import Literal
 from uuid import UUID
 
-from app.core.database import SessionLocal
+from app.core.database import SyncSessionLocal
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject
 from app.models.finance import ExpenseType, Finance
@@ -26,9 +26,9 @@ class GetUserOutput(BaseModel):
     data: list[UserInfo] = []
     message: str | None = None
 
+
 @tool
-async def get_user_info(
-    user_id: int,
+def get_user_info(
     target_user_id: int | None = None,
     target_user_name: str | None = None,
     has_finance_access: bool | None = None,
@@ -39,7 +39,6 @@ async def get_user_info(
     """
     Gets user information with the permission of user_id, from database table "user", filtered by parameters that is not None
     Args:
-        user_id: User who call this tool
         target_user_id: Target user ID to query, None if not filter by ID
         target_user_name: Target username, None if not filter by name
         has_finance_access: Filter user with finance access, None if do not want to filter by finance access
@@ -64,8 +63,8 @@ async def get_user_info(
     if has_dev_access is not None:
         stmt = stmt.where(User.has_dev_access == has_dev_access)
 
-    async with SessionLocal() as session:
-        users = (await session.execute(stmt)).scalars().all()
+    with SyncSessionLocal() as session:
+        users = (session.execute(stmt)).scalars().all()
 
     if not users:
         return GetUserOutput(data=[], message='No user fits the condition')
@@ -83,8 +82,7 @@ class GetExpensesOutput(BaseModel):
     total: float
 
 @tool
-async def get_expenses(
-    user_id: int,
+def get_expenses(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     expense_type: Literal["paycheck", "petty_cash", "investment", "other"] | None = None,
@@ -92,7 +90,6 @@ async def get_expenses(
     """
     Get expenses data with the permission of user_id, from database table "finance", filtered by parameters that is not None
     Args:
-        user_id: User who call this tool
         start_date: Start period to query expenses (inclusive, by created_at), None if not filter by start date
         end_date: End period to query expenses (inclusive, by created_at), None if not filter by end date
         expense_type: Specify which type of expenses to filter by, None if not filter by type
@@ -108,8 +105,8 @@ async def get_expenses(
     if expense_type is not None:
         stmt = stmt.where(Finance.expense_type == ExpenseType(expense_type))
 
-    async with SessionLocal() as session:
-        expenses = (await session.execute(stmt)).scalars().all()
+    with SyncSessionLocal() as session:
+        expenses = (session.execute(stmt)).scalars().all()
 
     if not expenses:
         return None
@@ -120,15 +117,13 @@ async def get_expenses(
     )
 
 @tool
-async def create_expense(
-    user_id: int,
+def create_expense(
     expense_type: Literal["paycheck", "petty_cash", "investment", "other"],
     amount: float,
 ) -> ExpenseDetail:
     """
     Creates a new expense record with the permission of user_id, into database table "finance"
     Args:
-        user_id: User who call this tool
         expense_type: Type of the expense to create
         amount: Amount of the expense to create
 
@@ -137,10 +132,10 @@ async def create_expense(
     """
     expense = Finance(expense_type=ExpenseType(expense_type), amount=amount)
 
-    async with SessionLocal() as session:
+    with SyncSessionLocal() as session:
         session.add(expense)
-        await session.commit()
-        await session.refresh(expense)
+        session.commit()
+        session.refresh(expense)
 
     return ExpenseDetail.model_validate(expense, from_attributes=True)
 
@@ -156,8 +151,7 @@ class GetDevProjectOutput(BaseModel):
     total: int
 
 @tool
-async def get_dev_project(
-    user_id: int,
+def get_dev_project(
     project_id: int | None = None,
     project_name: str | None = None,
 ) -> GetDevProjectOutput | None:
@@ -177,8 +171,8 @@ async def get_dev_project(
     if project_name is not None:
         stmt = stmt.where(DevProject.project_name == project_name)
 
-    async with SessionLocal() as session:
-        projects = (await session.execute(stmt)).scalars().all()
+    with SyncSessionLocal() as session:
+        projects = (session.execute(stmt)).scalars().all()
 
     if not projects:
         return None
@@ -203,8 +197,7 @@ class GetDevInvestmentOutput(BaseModel):
     total: float
 
 @tool
-async def get_dev_investment(
-    user_id: int,
+def get_dev_investment(
     project_id: int | None = None,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
@@ -236,8 +229,8 @@ async def get_dev_investment(
     if category is not None:
         stmt = stmt.where(DevInvestment.category == category)
 
-    async with SessionLocal() as session:
-        investments = (await session.execute(stmt)).scalars().all()
+    with SyncSessionLocal() as session:
+        investments = (session.execute(stmt)).scalars().all()
 
     if not investments:
         return None
@@ -259,11 +252,10 @@ class GetAttendanceOutput(BaseModel):
     total_hours: float
 
 @tool
-async def get_attendance(user_id: int, start_date: datetime, end_date: datetime) -> GetAttendanceOutput:
+def get_attendance(start_date: datetime, end_date: datetime) -> GetAttendanceOutput:
     """
     Get all attendance log in provided duration
     Args:
-        user_id:  User who call this tool
         start_date: Start period to query attendance (inclusive, by date)
         end_date:  End period to query attendance (inclusive, by date)
 
@@ -275,8 +267,8 @@ async def get_attendance(user_id: int, start_date: datetime, end_date: datetime)
     stmt = stmt.where(AttendanceLog.date <= end_date.date())
     stmt = stmt.where(AttendanceLog.clock_out.is_not(None))
 
-    async with SessionLocal() as session:
-        logs = (await session.execute(stmt)).scalars().all()
+    with SyncSessionLocal() as session:
+        logs = (session.execute(stmt)).scalars().all()
 
     user_detail = [
         UserAttendanceDetail(

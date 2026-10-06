@@ -6,7 +6,7 @@ from decimal import Decimal
 from traceback import format_exc
 
 from fastapi import Depends, APIRouter
-from fastapi.responses import JSONResponse as Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from starlette import status
@@ -18,10 +18,6 @@ from app.models import DevInvestment, DevProject, ProjectDownload, User
 
 dev_tracking_router = APIRouter(prefix="/dev_tracking", tags=["Dev Tracking"])
 
-
-# ---------------------------------------------------------------------------
-# DevProject
-# ---------------------------------------------------------------------------
 
 @dev_tracking_router.get("/project_list")
 async def get_project_list(current_user: User = Depends(get_current_user), db = Depends(get_db)):
@@ -36,7 +32,7 @@ async def get_project_list(current_user: User = Depends(get_current_user), db = 
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info('Query all dev projects')
     projects = (await db.scalars(select(DevProject))).all()
     data = []
@@ -44,7 +40,7 @@ async def get_project_list(current_user: User = Depends(get_current_user), db = 
         data.append(p.to_dict())
     log.info(f"{str(len(data))} dev projects found")
 
-    return Response({
+    return JSONResponse({
         "status": "success",
         "data": data,
     }, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -64,18 +60,18 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Query dev project ID: {project_id}')
 
     project = await db.get(DevProject, project_id)
     if not project:
         log.warning(f'Dev project ID: {project_id} not found')
-        return Response({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     project_data = project.to_dict()
     log.info(f'Query dev project: {project_data}')
 
-    return Response({"status": "success", "data": project_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return JSONResponse({"status": "success", "data": project_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
 
 class CreateProject(BaseModel):
@@ -102,7 +98,7 @@ async def create_project(new_project: CreateProject, current_user: User = Depend
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Create dev project with name: {new_project.project_name}')
 
     try:
@@ -115,10 +111,10 @@ async def create_project(new_project: CreateProject, current_user: User = Depend
         await db.refresh(project)
         project_data = project.to_dict()
         log.info(f'Dev project created: {project_data}')
-        return Response({"status": "success", "data": project_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
+        return JSONResponse({"status": "success", "data": project_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to create dev project: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.put("/project/{project_id}")
@@ -136,13 +132,13 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Update dev project ID: {project_id}')
 
     old_project = await db.get(DevProject, project_id)
     if not old_project:
         log.warning(f'Dev project ID: {project_id} not found')
-        return Response({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         for field_name, field_value in new_project:
@@ -151,10 +147,10 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
         await db.commit()
         await db.refresh(old_project)
         log.info(f'Dev project updated: {old_project.to_dict()}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update dev project: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.delete("/project/{project_id}")
@@ -171,22 +167,22 @@ async def delete_project(project_id: int, current_user: User = Depends(get_curre
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Delete dev project ID: {project_id}')
 
     project = await db.get(DevProject, project_id)
     if not project:
         log.warning(f'Dev project ID: {project_id} not found')
-        return Response({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(project)
         await db.commit()
         log.info(f'Dev project deleted ID: {project_id}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to delete dev project: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +202,7 @@ async def get_investment_list(current_user: User = Depends(get_current_user), db
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info('Query all dev investments')
     investments = (await db.scalars(select(DevInvestment))).all()
     data = []
@@ -214,7 +210,7 @@ async def get_investment_list(current_user: User = Depends(get_current_user), db
         data.append(i.to_dict())
     log.info(f"{str(len(data))} dev investments found")
 
-    return Response({
+    return JSONResponse({
         "status": "success",
         "data": data,
     }, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -234,18 +230,18 @@ async def get_investment(investment_id: int, current_user: User = Depends(get_cu
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Query dev investment ID: {investment_id}')
 
     investment = await db.get(DevInvestment, investment_id)
     if not investment:
         log.warning(f'Dev investment ID: {investment_id} not found')
-        return Response({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     investment_data = investment.to_dict()
     log.info(f'Query dev investment: {investment_data}')
 
-    return Response({"status": "success", "data": investment_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
 
 class CreateInvestment(BaseModel):
@@ -280,14 +276,14 @@ async def create_investment(new_investment: CreateInvestment, current_user: User
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Create dev investment for project ID: {new_investment.project_id}')
 
     try:
         project = await db.get(DevProject, new_investment.project_id)
         if not project:
             log.warning(f'Dev project ID: {new_investment.project_id} not found')
-            return Response({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         investment = DevInvestment(
             date=new_investment.date,
@@ -302,10 +298,10 @@ async def create_investment(new_investment: CreateInvestment, current_user: User
         await db.refresh(investment)
         investment_data = investment.to_dict()
         log.info(f'Dev investment created: {investment_data}')
-        return Response({"status": "success", "data": investment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
+        return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to create dev investment: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.put("/investment/{investment_id}")
@@ -323,19 +319,19 @@ async def update_investment(investment_id: int, new_investment: UpdateInvestment
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Update dev investment ID: {investment_id}')
 
     old_investment = await db.get(DevInvestment, investment_id)
     if not old_investment:
         log.warning(f'Dev investment ID: {investment_id} not found')
-        return Response({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     if new_investment.project_id is not None:
         project = await db.get(DevProject, new_investment.project_id)
         if not project:
             log.warning(f'Dev project ID: {new_investment.project_id} not found')
-            return Response({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         for field_name, field_value in new_investment:
@@ -344,10 +340,10 @@ async def update_investment(investment_id: int, new_investment: UpdateInvestment
         await db.commit()
         await db.refresh(old_investment)
         log.info(f'Dev investment updated: {old_investment.to_dict()}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update dev investment: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.delete("/investment/{investment_id}")
@@ -364,22 +360,22 @@ async def delete_investment(investment_id: int, current_user: User = Depends(get
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Delete dev investment ID: {investment_id}')
 
     investment = await db.get(DevInvestment, investment_id)
     if not investment:
         log.warning(f'Dev investment ID: {investment_id} not found')
-        return Response({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(investment)
         await db.commit()
         log.info(f'Dev investment deleted ID: {investment_id}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to delete dev investment: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +395,7 @@ async def get_download_list(current_user: User = Depends(get_current_user), db =
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info('Query all project downloads')
     downloads = (await db.scalars(select(ProjectDownload))).all()
     data = []
@@ -407,7 +403,7 @@ async def get_download_list(current_user: User = Depends(get_current_user), db =
         data.append(d.to_dict())
     log.info(f"{str(len(data))} project downloads found")
 
-    return Response({
+    return JSONResponse({
         "status": "success",
         "data": data,
     }, status_code=status.HTTP_200_OK, media_type='application/json')
@@ -427,18 +423,18 @@ async def get_download(download_id: int, current_user: User = Depends(get_curren
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Query project download ID: {download_id}')
 
     download = await db.get(ProjectDownload, download_id)
     if not download:
         log.warning(f'Project download ID: {download_id} not found')
-        return Response({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     download_data = download.to_dict()
     log.info(f'Query project download: {download_data}')
 
-    return Response({"status": "success", "data": download_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return JSONResponse({"status": "success", "data": download_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
 
 class CreateDownload(BaseModel):
@@ -471,14 +467,14 @@ async def create_download(new_download: CreateDownload, current_user: User = Dep
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Create project download for project ID: {new_download.project_id}')
 
     try:
         project = await db.get(DevProject, new_download.project_id)
         if not project:
             log.warning(f'Dev project ID: {new_download.project_id} not found')
-            return Response({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return JSONResponse({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         download = ProjectDownload(
             project_id=new_download.project_id,
@@ -492,10 +488,10 @@ async def create_download(new_download: CreateDownload, current_user: User = Dep
         await db.refresh(download)
         download_data = download.to_dict()
         log.info(f'Project download created: {download_data}')
-        return Response({"status": "success", "data": download_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
+        return JSONResponse({"status": "success", "data": download_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to create project download: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.put("/download/{download_id}")
@@ -513,19 +509,19 @@ async def update_download(download_id: int, new_download: UpdateDownload, curren
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Update project download ID: {download_id}')
 
     old_download = await db.get(ProjectDownload, download_id)
     if not old_download:
         log.warning(f'Project download ID: {download_id} not found')
-        return Response({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     if new_download.project_id is not None:
         project = await db.get(DevProject, new_download.project_id)
         if not project:
             log.warning(f'Dev project ID: {new_download.project_id} not found')
-            return Response({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return JSONResponse({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         for field_name, field_value in new_download:
@@ -534,10 +530,10 @@ async def update_download(download_id: int, new_download: UpdateDownload, curren
         await db.commit()
         await db.refresh(old_download)
         log.info(f'Project download updated: {old_download.to_dict()}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to update project download: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 @dev_tracking_router.delete("/download/{download_id}")
@@ -554,19 +550,19 @@ async def delete_download(download_id: int, current_user: User = Depends(get_cur
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
-        return Response({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
     log.info(f'Delete project download ID: {download_id}')
 
     download = await db.get(ProjectDownload, download_id)
     if not download:
         log.warning(f'Project download ID: {download_id} not found')
-        return Response({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(download)
         await db.commit()
         log.info(f'Project download deleted ID: {download_id}')
-        return Response({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
         log.error(f'Failed to delete project download: {format_exc()}')
-        return Response({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')

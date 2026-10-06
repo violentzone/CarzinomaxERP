@@ -4,7 +4,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Carzinomax ERP"
+    PROJECT_NAME: str = "Carzinomax Dev"
     API_V1_STR: str = "/api/v1"
 
     # JWT & Auth

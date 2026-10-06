@@ -40,7 +40,7 @@ def call_hr_helper_agent(query: str):
             'content': query
         }
         })
-    return result['messages'][-1]
+    return result['messages'][-1].content
 
 @tool('expanse_helper', description='Agent that helps with expanse-relate tasks')
 def call_expanse_helper_agent(query: str):
@@ -50,7 +50,7 @@ def call_expanse_helper_agent(query: str):
              'content': query}
     ]}
     )
-    return result['messages'][-1]
+    return result['messages'][-1].content
 
 orchestrator = create_agent(model=llm, system_prompt=load_prompt('orchestrator_prompt.md'), tools=[call_hr_helper_agent, call_expanse_helper_agent])
 

@@ -5,8 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.future import select
 
+from app.ai_service import llm
 from app.core.config import settings
-from app.core.database import engine, SessionLocal
+from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models.auth import User
 from app.api.v1 import api_router
@@ -69,7 +70,7 @@ async def lifespan(app: FastAPI):
     # Verify the LLM configured in .env is reachable. Failure is logged but does
     # not block startup, so the rest of the ERP stays usable without an LLM.
     try:
-        await LlmRouter.model_check()
+        llm_test = llm.invoke('ping', max_tokens=1)
         log.info(f"LLM ready ({settings.LLM_TYPE}: {settings.LLM_MODEL})")
     except Exception as e:
         log.error(f"LLM check failed, AI features unavailable: {e}")
