@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette import status
 from datetime import datetime
 
-from app.ai_service.agents import llm, orchestrator
+from app.ai_service.agents import llm, init_orchestrator
 from app.core.log_module import user_log
 from app.models.auth import User
 from app.schemas.chatbot import ChatboxRequest
@@ -50,7 +50,7 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
     log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message}')
     history = [m.model_dump() for m in payload.history[-MAX_HISTORY_MESSAGES:]]
     formatted_user_input = {'messages': history + [{'role': 'user', 'content': payload.message}]}
-
+    orchestrator = init_orchestrator(current_user.id)
     async def stream_reply():
         try:
             async for chunk, metadata in orchestrator.astream(formatted_user_input, stream_mode='messages'):

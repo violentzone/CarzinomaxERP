@@ -69,11 +69,14 @@ def init_orchestrator(user_id: int):
         stmt = select(User).where(User.id == user_id)
         caller = session.execute(stmt).scalar_one_or_none()
     if not caller:
-        raise
-
+        raise ValueError('Unknow user ID')
+    # Append tool list of user
+    tool_list = []
     if caller.has_hr_access:
-
-    orchestrator_agent = create_agent(model=llm, system_prompt=load_prompt('orchestrator_prompt.md'), tools=[call_hr_helper_agent, call_expanse_helper_agent])
+        tool_list.append(call_hr_helper_agent)
+    if caller.has_dev_access:
+        tool_list.append(call_expanse_helper_agent)
+    orchestrator_agent = create_agent(model=llm, system_prompt=load_prompt('orchestrator_prompt.md'), tools=tool_list)
     return orchestrator_agent
 
 # Test run area
