@@ -2,9 +2,12 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langchain_litellm import ChatLiteLLM
 from langchain.tools import tool
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.ai_service import tool_store
+from app.core.database import SyncSessionLocal
+from app.models.auth import User
 
 PROMPTS_DIR = Path(__file__).parent / 'prompts'
 
@@ -52,11 +55,30 @@ def call_expanse_helper_agent(query: str):
     )
     return result['messages'][-1].content
 
-orchestrator = create_agent(model=llm, system_prompt=load_prompt('orchestrator_prompt.md'), tools=[call_hr_helper_agent, call_expanse_helper_agent])
+def init_orchestrator(user_id: int):
+    """
+    Create orchestrator, with permitted subagents, subagent are selected by User's `has_finance_access`, `has_scm_access`, `has_hr_access` and `has_dev_access`
+    Args:
+        user_id: User who call orchestrator
 
+    Returns:
+        Agent orchestrator
+    """
+    # Configure sub-agent list
+    with SyncSessionLocal() as session:
+        stmt = select(User).where(User.id == user_id)
+        caller = session.execute(stmt).scalar_one_or_none()
+    if not caller:
+        raise
+
+    if caller.has_hr_access:
+
+    orchestrator_agent = create_agent(model=llm, system_prompt=load_prompt('orchestrator_prompt.md'), tools=[call_hr_helper_agent, call_expanse_helper_agent])
+    return orchestrator_agent
 
 # Test run area
 if __name__ == '__main__':
+    orchestrator = init_orchestrator(user_id=1)
     while True:
         terminal_input = input('test input: \n')
         if terminal_input == 'exit':
