@@ -139,3 +139,18 @@ export async function apiLogin(email, password) {
   // Defensive: strip quotes in case the server ever JSON-encodes the string.
   return token.replace(/^"|"$/g, '')
 }
+
+/**
+ * POST and hand back the raw `Response` so the caller can read a streamed body.
+ * Non-2xx responses go through `parse` so ApiError and the 401 broadcast match `apiPost`.
+ */
+export async function apiPostStream(path, body, { signal } = {}) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok) await parse(res)
+  return res
+}

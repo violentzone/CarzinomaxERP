@@ -40,3 +40,10 @@ export const modalVariants = {
   show: { opacity: 1, scale: 1, y: 0, transition: spring },
   exit: { opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.15 } },
 }
+
+/** Right-hand slide-over drawer (chat panel). */
+export const drawerVariants = {
+  hidden: { x: '100%' },
+  show: { x: 0, transition: spring },
+  exit: { x: '100%', transition: { duration: 0.2 } },
+}
