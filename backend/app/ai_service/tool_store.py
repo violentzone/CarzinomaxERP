@@ -10,9 +10,10 @@ from app.core.security import get_password_hash
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject
 from app.models.finance import ExpenseType, Finance
-from app.models.hr import AttendanceLog
+from app.models.hr import AttendanceLog, LeaveRequest
 
 
+##### AUTH #####
 class UserInfo(BaseModel):
     id: int | None = None
     full_name: str | None = None
@@ -105,7 +106,7 @@ def create_user(new_user_email: str, password: str, full_name: str=None,
 
     return UserInfo.model_validate(user, from_attributes=True)
 
-
+##### FINANCE #####
 class ExpenseDetail(BaseModel):
     id: UUID
     expense_type: ExpenseType
@@ -175,6 +176,7 @@ def create_expense(
 
     return ExpenseDetail.model_validate(expense, from_attributes=True)
 
+##### DEV-TRACKING #####
 class DevProjectDetail(BaseModel):
     project_id: int
     project_name: str
@@ -287,6 +289,7 @@ class GetAttendanceOutput(BaseModel):
     user_detail: list[UserAttendanceDetail]
     total_hours: float
 
+##### HR #####
 @tool
 def get_attendance(start_date: datetime, end_date: datetime) -> GetAttendanceOutput:
     """
@@ -320,3 +323,54 @@ def get_attendance(start_date: datetime, end_date: datetime) -> GetAttendanceOut
         user_detail=user_detail,
         total_hours=sum(d.hours for d in user_detail),
     )
+
+class GetLeavesDetail(BaseModel):
+    user_id: int
+    leave_type: str
+    start_date: date_type | datetime
+    end_date: date_type | datetime
+    reason: str | None = None
+    status: str
+
+class GetLeavesOutput(BaseModel):
+    user_id: int | None = None
+    data: list[GetLeavesDetail]
+
+@tool
+def get_leaves(user_id: int | None=None, full_name: str | None=None, start_date: datetime | None=None, end_date: datetime | None=None) -> GetLeavesOutput:
+    """
+    Get leaves log of a user in provided, should at least provide user_id or full_name or will raise ValueError
+    Args:
+        user_id: Leaves of a user ID
+        full_name: Leaves of a user's full name
+        start_date: Query start date
+        end_date: Query end date, defaults to current date
+
+    Returns:
+        Leave log of a user in provided criteria
+    """
+    if end_date is None:
+        end_date = datetime.now()
+
+    # Checks
+    if not any([user_id, full_name]):
+        raise ValueError('Must provide at least one of user_id or full_name')
+    if start_date is not None and start_date > end_date:
+        raise ValueError('Start date must be earlier than end date')
+
+    # Query from merged table of "users" and "leave_requests"
+    stmt = select(LeaveRequest, User.id, User.full_name).join(User, LeaveRequest.user_id == User.id)
+    if user_id is not None:
+        stmt = stmt.where(LeaveRequest.user_id == user_id)
+    if full_name is not None:
+        stmt = stmt.where(User.full_name == full_name)
+    if start_date is not None:
+        stmt = stmt.where(LeaveRequest.start_date == start_date)
+    stmt = stmt.where(LeaveRequest.end_date == end_date)
+    with SyncSessionLocal() as session:
+        leaves = session.execute(stmt).scalars().all()
+
+    resolved_user_id = user_id if user_id is not None else (leaves[0].user_id if leaves else None)
+    data = [GetLeavesDetail.model_validate(e, from_attributes=True) for e in leaves]
+    return GetLeavesOutput(user_id=resolved_user_id, data=data)
+
