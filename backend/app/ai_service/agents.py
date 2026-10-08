@@ -27,7 +27,7 @@ llm = ChatLiteLLM(model=settings.LLM_MODEL, api_key=settings.LLM_API_KEY or None
                   api_base=settings.LLM_API_BASE if settings.LLM_TYPE == 'local' else None)
 
 
-hr_helper_agent = create_agent(model=llm, system_prompt=load_prompt('hr_helper_prompt.md'), tools=[tool_store.get_user_info, tool_store.get_attendance])
+hr_helper_agent = create_agent(model=llm, system_prompt=load_prompt('hr_helper_prompt.md'), tools=[tool_store.get_user_info, tool_store.get_attendance, tool_store.create_user])
 
 
 expanse_helper_agent = create_agent(
@@ -37,6 +37,7 @@ expanse_helper_agent = create_agent(
 
 @tool('hr_helper', description='Agent that helps get user information')
 def call_hr_helper_agent(query: str):
+    print('Use HR helper')
     result = hr_helper_agent.invoke(
         {'messages': {
             'role': 'user',
@@ -47,6 +48,7 @@ def call_hr_helper_agent(query: str):
 
 @tool('expanse_helper', description='Agent that helps with expanse-relate tasks')
 def call_expanse_helper_agent(query: str):
+    print('Use expanse helper')
     result = expanse_helper_agent.invoke({
         'messages': [
             {'role': 'user',
