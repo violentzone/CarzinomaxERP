@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MessageSquarePlus, Send, Sparkles, X } from 'lucide-react'
+import { MessageSquarePlus, Send, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { backdropVariants, drawerVariants } from '../../lib/motion'
 import { useChat } from '../../lib/useChat'
 import Button from '../ui/Button'
@@ -13,7 +13,7 @@ import Spinner from '../ui/Spinner'
  * toggles the drawer DOM. Closes on the X, Escape or a scrim click.
  */
 export default function ChatPanel({ open, onClose }) {
-  const { messages, streaming, error, send, reset } = useChat()
+  const { messages, streaming, error, pending, send, decide, reset } = useChat()
 
   useEffect(() => {
     if (!open) return
@@ -68,7 +68,8 @@ export default function ChatPanel({ open, onClose }) {
               </div>
             </div>
             <MessageList messages={messages} streaming={streaming} error={error} />
-            <Composer onSend={send} busy={streaming} />
+            {pending && <ApprovalCard actions={pending} onDecide={decide} busy={streaming} />}
+            <Composer onSend={send} busy={streaming || Boolean(pending)} />
           </motion.aside>
         </>
       )}
@@ -87,7 +88,9 @@ function MessageList({ messages, streaming, error }) {
   const lastIndex = messages.length - 1
   return (
     <div className="chat-messages">
-      {messages.length === 0 && <p className="chat-empty">Ask about user info, attendance or expenses.</p>}
+      {messages.length === 0 && (
+        <p className="chat-empty">Ask about people, payroll, expenses, products or dev projects, or tell me what to record.</p>
+      )}
       {messages.map((m, i) => (
         <div key={i} className={`chat-msg ${m.role}`}>
           {m.content || (streaming && i === lastIndex ? <Spinner size={14} /> : null)}
@@ -95,6 +98,46 @@ function MessageList({ messages, streaming, error }) {
       ))}
       {error && <p className="chat-error">{error}</p>}
       <div ref={endRef} />
+    </div>
+  )
+}
+
+/** Format a tool argument for the approval card. */
+function argText(value) {
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+/**
+ * Shown while the assistant waits for permission to delete. Lists each
+ * requested action with its arguments; Approve runs them, Reject cancels.
+ */
+function ApprovalCard({ actions, onDecide, busy }) {
+  return (
+    <div className="chat-approval" role="group" aria-label="Approval required">
+      <div className="chat-approval-head">
+        <ShieldAlert size={16} />
+        <strong>Approval required</strong>
+      </div>
+      <ul className="chat-approval-list">
+        {actions.map((a, i) => (
+          <li key={i}>
+            <code>{a.name}</code>
+            <span className="chat-approval-args">
+              {Object.entries(a.args || {})
+                .map(([k, v]) => `${k}: ${argText(v)}`)
+                .join(', ')}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="chat-approval-actions">
+        <Button variant="ghost" onClick={() => onDecide('reject')} disabled={busy}>
+          Reject
+        </Button>
+        <Button variant="danger" onClick={() => onDecide('approve')} disabled={busy}>
+          Approve
+        </Button>
+      </div>
     </div>
   )
 }

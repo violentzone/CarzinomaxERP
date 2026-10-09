@@ -65,7 +65,8 @@ wired in but not yet driving any feature.
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM router** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm): hosted APIs or a local server. Connection is verified at startup; chat, streaming and schema-validated (parsed) calls are ready |
-| **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. No AI-driven endpoints yet |
+| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart) |
+| **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. Not built yet |
 | **Background scheduler** | 🚧 Scaffolded | APScheduler starts with the app; no jobs registered yet (monthly payroll run is planned) |
 
 Every module endpoint answers with the same envelope, so the frontend and any
@@ -165,8 +166,8 @@ backend/
 │   ├── main.py            # App entrypoint: startup banner, admin seed, LLM check, scheduler
 │   ├── api/
 │   │   ├── common/        # get_current_user (JWT) and per-module permission_check
-│   │   └── v1/            # Routers: auth, hr, finance, scm, dev_tracking
-│   ├── ai_service/        # LlmRouter — litellm wrapper: model_check, chat, stream_chat, parsed_chat
+│   │   └── v1/            # Routers: auth, hr, finance, scm, dev_tracking, chatbot
+│   ├── ai_service/        # LlmRouter (litellm wrapper), chat orchestrator + sub-agents, tool_store (one tool per CRUD op), prompts/
 │   ├── core/              # config (pydantic-settings), database, security, scheduler, log_module
 │   ├── models/            # SQLAlchemy 2.0 ORM models
 │   └── schemas/           # Pydantic request/response schemas
@@ -194,6 +195,7 @@ All routes live under `/api/v1` and, except for login, expect an
 | `/finance` | expenses |
 | `/scm` | products |
 | `/dev_tracking` | projects, investments, downloads |
+| `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision` |
 
 Lists are `GET /<module>/<thing>_list`; single records are
 `/<module>/<thing>/{id}` with `POST` (create), `PUT` (partial update) and
@@ -206,6 +208,7 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Dev Tracking — projects, investments, adoption snapshots
 - [x] React frontend
 - [x] LLM router with startup health check
+- [x] Chat control of every module (read / create / update, approval-gated delete)
 - [ ] **AI "receipt → booked" flow** (flagship demo)
 - [ ] Finance: amounts, vendors, dates and due-date tracking on expenses
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)

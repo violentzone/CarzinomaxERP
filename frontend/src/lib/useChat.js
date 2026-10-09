@@ -29,51 +29,72 @@ function appendToLast(setMessages, chunk) {
  * its empty assistant bubble and reports via toast; a stream-level `error`
  * event is exposed as `error` so the panel can show it inline.
  *
- * `reset` aborts any in-flight reply and clears the transcript, starting a
- * new conversation.
+ * When the assistant wants to delete something the stream pauses with an
+ * `interrupt` event; the requested actions are exposed as `pending` and
+ * `decide('approve' | 'reject')` resumes the same reply.
  *
- * @returns {{messages, streaming, error, send, reset}}
+ * Every conversation has a client-generated `thread_id` so the backend can
+ * resume a paused run. `reset` aborts any in-flight reply, clears the
+ * transcript and starts a new thread.
+ *
+ * @returns {{messages, streaming, error, pending, send, decide, reset}}
  */
 export function useChat() {
   const [messages, setMessages] = useState([])
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState(null)
+  const [pending, setPending] = useState(null)
   const abortRef = useRef(null)
+  const threadRef = useRef(crypto.randomUUID())
   const toast = useToast()
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  const send = async (text) => {
-    const message = text.trim()
-    if (!message || streaming) return
-    const history = messages.filter((m) => m.content).slice(-MAX_HISTORY_MESSAGES)
+  /** Stream one request into the trailing assistant bubble. */
+  const run = async (body) => {
     const controller = new AbortController()
     abortRef.current = controller
     setError(null)
     setStreaming(true)
-    setMessages((list) => [...list, { role: 'user', content: message }, { role: 'assistant', content: '' }])
     try {
-      const events = await chatbotApi.stream({ message, history }, { signal: controller.signal })
+      const events = await chatbotApi.stream({ ...body, thread_id: threadRef.current }, { signal: controller.signal })
       for await (const ev of events) {
         if (ev.type === 'token') appendToLast(setMessages, textOf(ev.content))
+        else if (ev.type === 'interrupt') setPending(ev.actions)
         else if (ev.type === 'error') setError(ev.message || 'The assistant failed to reply')
       }
     } catch (err) {
       if (err?.name === 'AbortError') return
-      setMessages((list) => list.slice(0, -1))
+      setMessages((list) => (list[list.length - 1]?.content ? list : list.slice(0, -1)))
       toast.error(err?.detail || err?.message || 'Chat request failed')
     } finally {
       setStreaming(false)
     }
   }
 
+  const send = async (text) => {
+    const message = text.trim()
+    if (!message || streaming || pending) return
+    const history = messages.filter((m) => m.content).slice(-MAX_HISTORY_MESSAGES)
+    setMessages((list) => [...list, { role: 'user', content: message }, { role: 'assistant', content: '' }])
+    await run({ message, history })
+  }
+
+  const decide = async (decision) => {
+    if (!pending || streaming) return
+    setPending(null)
+    await run({ decision })
+  }
+
   const reset = () => {
     abortRef.current?.abort()
     abortRef.current = null
+    threadRef.current = crypto.randomUUID()
     setMessages([])
     setError(null)
+    setPending(null)
     setStreaming(false)
   }
 
-  return { messages, streaming, error, send, reset }
+  return { messages, streaming, error, pending, send, decide, reset }
 }

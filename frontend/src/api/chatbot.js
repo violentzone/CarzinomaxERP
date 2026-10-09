@@ -20,11 +20,14 @@ async function* readNdjson(response) {
 
 export const chatbotApi = {
   /**
-   * Stream the orchestrator's reply. Resolves to an async iterator of
-   * `{type:'token', content}`, `{type:'done'}` or `{type:'error', message}` events.
+   * Stream the orchestrator's reply. Send either `message` (a new turn) or
+   * `decision` ('approve' | 'reject', answering a pending approval) together
+   * with the conversation's `thread_id`. Resolves to an async iterator of
+   * `{type:'token', content}`, `{type:'interrupt', actions:[{name, args, description}]}`,
+   * `{type:'done'}` or `{type:'error', message}` events.
    */
-  stream: async ({ message, history }, { signal } = {}) => {
-    const res = await apiPostStream('/chatbot/chatbox', { message, history }, { signal })
+  stream: async ({ message = '', history = [], thread_id, decision }, { signal } = {}) => {
+    const res = await apiPostStream('/chatbot/chatbox', { message, history, thread_id, decision }, { signal })
     return readNdjson(res)
   },
 }
