@@ -193,7 +193,7 @@ function ProjectsSection({ investments, downloads, onChanged }) {
         },
       ]}
       fields={[
-        { key: 'project_name', label: 'Project name', required: true, placeholder: 'Carzinomax ERP', full: true },
+        { key: 'project_name', label: 'Project name', required: true, placeholder: 'Carzinomax DEV', full: true },
         { key: 'project_description', label: 'Description', type: 'textarea', full: true, nullable: true, placeholder: 'What is it, where is it at?' },
       ]}
     />

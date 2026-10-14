@@ -1,6 +1,6 @@
 <div align="center">
 
-# CarzinomaxERP
+# Carzinomax DEV
 
 ### The open-source ERP where AI does the data entry.
 
@@ -27,7 +27,7 @@ Existing ERPs (Odoo, ERPNext, SAP) are powerful but assume you have a **team of
 people to feed them data** — someone to type in invoices, reconcile payments,
 and categorize every expense. Solo founders and tiny teams don't have that.
 
-CarzinomaxERP flips it: the ERP does the paperwork **for** you. You hand it a
+Carzinomax DEV flips it: the ERP does the paperwork **for** you. You hand it a
 document; the AI does the busywork and asks you to confirm. The goal is an ERP
 that a two-person company can actually run without hiring a bookkeeper.
 
@@ -41,7 +41,7 @@ You:  *forwards a $340 AWS invoice*
 AI:   Booked it. Here's what I did:
       • Created expense       INV-AWS-0725  ·  $340.00
       • Categorized to        investment · Cloud (AWS)
-      • Linked to project     carzinomax-erp
+      • Linked to project     carzinomax-dev
       • Due date              2026-08-14  → flagged
       Want me to schedule the payment for the 12th?
 ```

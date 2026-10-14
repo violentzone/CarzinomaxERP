@@ -1,6 +1,6 @@
-# Carzinomax ERP — Frontend
+# Carzinomax DEV — Frontend
 
-A modern, animated single-page app for the Carzinomax ERP, built to match the
+A modern, animated single-page app for the Carzinomax DEV, built to match the
 FastAPI backend under `backend/app/api/v1`. React 19 + Vite, with a violet /
 electric design system, motion throughout (Framer Motion), and dashboard charts
 (Recharts).
