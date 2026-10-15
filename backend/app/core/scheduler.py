@@ -11,28 +11,27 @@ from app.core.log_module import system_log
 scheduler = AsyncIOScheduler()
 
 
-async def github_sync_job() -> None:
-    """Scheduled GitHub stars/downloads sync (job id ``github_sync``).
-
-    Opens its own session and never raises: APScheduler reports job errors through the
-    std ``logging`` module, which this app does not forward to loguru.
-    """
-    log = system_log()
-    log.info("Scheduler: github_sync started")
-    try:
-        async with SessionLocal() as session:
-            result = await sync_github_repos(session)
-    except Exception:
-        log.error(f"Scheduler: github_sync failed: {format_exc()}")
-        return
-    for row in result.failed:
-        log.warning(f"Scheduler: github_sync {row['full_name']} (repo {row['id']}) failed: {row['last_error']}")
-    log.info(f"Scheduler: github_sync finished, {len(result.synced)} synced, {len(result.failed)} failed")
-
-
 def _register_github_sync() -> None:
     """Register ``github_sync`` from GITHUB_SYNC_CRON; an invalid cron is logged and skipped."""
     log = system_log()
+
+    async def github_sync_job() -> None:
+        """Scheduled GitHub stars/downloads sync (job id ``github_sync``).
+
+        Opens its own session and never raises: APScheduler reports job errors through the
+        std ``logging`` module, which this app does not forward to loguru.
+        """
+        log.info("Scheduler: github_sync started")
+        try:
+            async with SessionLocal() as session:
+                result = await sync_github_repos(session)
+        except Exception:
+            log.error(f"Scheduler: github_sync failed: {format_exc()}")
+            return
+        for row in result.failed:
+            log.warning(f"Scheduler: github_sync {row['full_name']} (repo {row['id']}) failed: {row['last_error']}")
+        log.info(f"Scheduler: github_sync finished, {len(result.synced)} synced, {len(result.failed)} failed")
+
     try:
         trigger = CronTrigger.from_crontab(settings.GITHUB_SYNC_CRON)
     except ValueError as err:
