@@ -25,7 +25,8 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * Paycheck creation computes `net_pay = base + allowances − deductions` unless the client sends one.
 
 ### 3. Dev Tracking ([models/dev_tracking.py](backend/app/models/dev_tracking.py), [api/v1/dev_tracking.py](backend/app/api/v1/dev_tracking.py))
-* `DevProject` (keyed by `project_id`), `DevInvestment` (date, amount, vendor, category: cloud / software_licenses / hardware / consulting), `ProjectDownload` (per-platform download/star snapshots: github, dockerhub, npm). Deleting a project cascades to its investments and snapshots.
+* `DevProject` (keyed by `project_id`), `DevInvestment` (date, amount, vendor, category: cloud / software_licenses / hardware / consulting), `ProjectDownload` (per-platform download/star snapshots: github, dockerhub, npm). Deleting a project cascades to its investments, snapshots and tracked repos.
+* `GithubRepo` (table `dev_github_repos`: `project_id`, unique `full_name` as `owner/name`, latest `star_count` / `download_count`, `last_synced_at`, `last_error`). `app/core/github.py` fetches `stargazers_count` and the sum of release-asset `download_count` over all releases (httpx; `GITHUB_TOKEN` is optional for public repos and required for private ones) and upserts **one `ProjectDownload` row per project per UTC day** (platform `github`, totals over the project's repos, updated in place; hand edits to that row are overwritten). It runs from the scheduler and from `POST /dev_tracking/github_sync[/{repo_id}]`, which answers `{synced: [...], failed: [...]}`; a repo whose fetch fails keeps its old numbers and stores `last_error`. REST CRUD lives at `/dev_tracking/github_repo…` (renaming a repo clears its cached numbers). No chat tool yet (owner decision).
 
 ### 4. Finance ([models/finance.py](backend/app/models/finance.py), [api/v1/finance.py](backend/app/api/v1/finance.py))
 * Minimal. `Finance` has a UUID id, an `expense_type` enum (`paycheck`, `petty_cash`, `investment`, `other`) and a required `amount` (Numeric 15,2; present in `0001_init`). No vendors or dates yet.
@@ -51,7 +52,8 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * `agents.py` has a `__main__` CLI loop for manual testing: `uv run python -m app.ai_service.agents` from `backend/` (uses user id 1).
 
 ### 7. Scheduler ([core/scheduler.py](backend/app/core/scheduler.py))
-* An `AsyncIOScheduler` starts and stops with the app. **No jobs are registered.** `PAYCHECK_CALCULATE_TIMESPOT` (cron string, default `0 0 1 * *`) is read into settings but unused; the monthly payroll job is planned, not implemented.
+* An `AsyncIOScheduler` starts and stops with the app. One job is registered: `github_sync` (`CronTrigger.from_crontab(GITHUB_SYNC_CRON)`, default `0 */6 * * *`, `misfire_grace_time=3600`) opens its own `SessionLocal` session and calls `sync_github_repos`. Jobs catch every exception and log through `system_log()` with a `Scheduler:` prefix, because APScheduler reports job errors via std `logging`, which is not forwarded to loguru. An invalid cron string is logged at startup and the job is skipped. There is one scheduler per process, so run the backend single-worker.
+* `PAYCHECK_CALCULATE_TIMESPOT` (cron string, default `0 0 1 * *`) is still read into settings but unused; the monthly payroll job is planned, not implemented.
 
 ### 8. Frontend ([frontend/](frontend/))
 * React 19 + Vite SPA, complete for every backend module: Dashboard, People & Payroll, Finance, Purchases, Dev Tracking, Users & Access. Framer Motion, Recharts, lucide-react, react-router. Native `fetch` wrapper in `src/lib/api.js` (no axios).
@@ -65,6 +67,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * `app/middleware/` is an empty package; `langgraph-supervisor` is in `pyproject.toml` but never imported.
 * `POST /chatbot/` is unauthenticated.
 * `backend/README.md` is empty.
+* `GithubRepo` has REST endpoints but no chat tool (owner decision; add one in `tool_store.py` on request).
 
 ---
 
@@ -102,13 +105,14 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │       │       ├── hr.py                # /hr: users, departments, attendance, leave_requests, paychecks
 │       │       ├── finance.py           # /finance: expenses
 │       │       ├── scm.py               # /scm: products
-│       │       ├── dev_tracking.py      # /dev_tracking: projects, investments, downloads
+│       │       ├── dev_tracking.py      # /dev_tracking: projects, investments, downloads, github_repo, github_sync
 │       │       └── chatbot.py           # /chatbot: LLM ping, NDJSON chatbox stream
 │       ├── core/
 │       │   ├── config.py                # pydantic-settings; derives ASYNC_DATABASE_URL (asyncpg)
 │       │   ├── database.py              # async engine + SessionLocal/get_db; sync engine (psycopg) + SyncSessionLocal/get_sync_db
+│       │   ├── github.py                # GitHub stars/downloads fetch + sync_github_repos (scheduler job and manual endpoint)
 │       │   ├── log_module.py            # system_log() / user_log(user_id) on loguru
-│       │   ├── scheduler.py             # APScheduler start/stop (no jobs yet)
+│       │   ├── scheduler.py             # APScheduler start/stop + the github_sync job
 │       │   └── security.py              # JWT create/decode, bcrypt hashing
 │       ├── middleware/                  # Empty package (unused)
 │       ├── models/                      # SQLAlchemy 2.0 models
@@ -117,7 +121,7 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │       │   ├── hr.py                    # Department, AttendanceLog, LeaveRequest, Paycheck
 │       │   ├── finance.py               # ExpenseType, Finance
 │       │   ├── scm.py                   # Product
-│       │   └── dev_tracking.py          # DevProject, DevInvestment, ProjectDownload
+│       │   └── dev_tracking.py          # DevProject, DevInvestment, ProjectDownload, GithubRepo
 │       └── schemas/
 │           ├── auth.py                  # Token, TokenPayload, User* (used by auth + security)
 │           ├── chatbot.py               # ChatMessage, ChatboxRequest (used by chatbot router)
@@ -147,7 +151,7 @@ Requires Python 3.14+, PostgreSQL, and [uv](https://github.com/astral-sh/uv). Ru
 
 ```bash
 cd backend
-cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*
+cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*; optional GITHUB_TOKEN / GITHUB_SYNC_CRON
 uv sync
 uv run alembic upgrade head # tables are created ONLY by Alembic; startup does not create_all
 uv run uvicorn app.main:app --reload
@@ -186,6 +190,7 @@ There is no test suite (`backend/.pytest_cache` exists but holds nothing). If yo
 * **LLM calls.** Use the shared `llm` (`ChatLiteLLM`) from `app.ai_service` or go through the orchestrator; never import litellm or build a second model client in a router. For anything the code will act on, use structured output (a Pydantic model via `with_structured_output` or a tool) rather than parsing free text.
 * **Chat tools.** One `@tool` per operation in `tool_store.py`; keep the `XxxDetail` / `GetXxxOutput` / `DeleteOutput` return models, filter only on non-`None` args, raise `ValueError` for bad input, no `user_id` argument. Register the tool in `agents.py` and document it in the matching prompt file; deletes go on the orchestrator and into the module's `*_DELETE_TOOLS`.
 * **Startup must not hard-depend on the LLM.** The ping is best-effort; keep it that way so the ERP runs without an AI provider.
+* **Scheduler jobs.** Register them in `start_scheduler()` before `scheduler.start()`. A job opens its own `SessionLocal` session, catches every exception and logs via `system_log()` with a `Scheduler:` prefix. Logic shared with an endpoint lives in `app/core/` (e.g. `github.py`) so the router calls the same function. Config errors (bad cron) are logged and the job skipped; startup keeps working.
 
 ### Frontend (React)
 * Plain JSX, no TypeScript. One API wrapper file per backend router in `src/api/`, using `src/lib/api.js`, which unwraps the envelope so wrappers resolve to `data`. Streaming endpoints use `apiPostStream`.

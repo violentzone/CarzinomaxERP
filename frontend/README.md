@@ -94,7 +94,10 @@ token) clears the session and returns you to the login screen.
 
 - **Dev Tracking** — projects are keyed by `project_id`. "Downloads" for a
   project is the sum of the *latest* snapshot on each platform, not the sum of
-  every row; "stars" is the highest count seen in those snapshots.
+  every row; "stars" is the highest count seen in those snapshots. Rows with
+  platform `github` are also written by the backend's GitHub sync (one row per
+  project per UTC day, totals over the project's tracked repos); hand edits to
+  those rows are overwritten at the next sync.
 - **People & Payroll** — paychecks recompute `net_pay` (base + allowances −
   deductions) on save unless you type a value. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
