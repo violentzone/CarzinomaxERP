@@ -75,10 +75,12 @@ async def get_expense(expense_id: UUID, current_user: User = Depends(get_current
 
 class CreateExpense(BaseModel):
     expense_type: ExpenseType
+    amount: float
 
 
 class UpdateExpense(BaseModel):
     expense_type: ExpenseType | None = None
+    amount: float | None = None
 
 
 @finance_router.post("/expense")
@@ -99,7 +101,7 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
     log.info(f'Create expense with type: {new_expense.expense_type}')
 
     try:
-        expense = Finance(expense_type=new_expense.expense_type)
+        expense = Finance(expense_type=new_expense.expense_type, amount=new_expense.amount)
         db.add(expense)
         await db.commit()
         await db.refresh(expense)
