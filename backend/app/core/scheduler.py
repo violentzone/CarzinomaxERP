@@ -10,6 +10,7 @@ from app.core.log_module import system_log
 
 scheduler = AsyncIOScheduler()
 
+system_log = system_log()  #TODO: Use this logger file wise
 
 def _register_github_sync() -> None:
     """Register ``github_sync`` from GITHUB_SYNC_CRON; an invalid cron is logged and skipped."""
