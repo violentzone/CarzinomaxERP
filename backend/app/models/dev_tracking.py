@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, Date, Text, ForeignKey
+from sqlalchemy import String, Numeric, Date, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -38,4 +38,19 @@ class ProjectDownload(Base, TimestampMixin):
     star_count: Mapped[Optional[int]] = mapped_column(nullable=True)
 
 
+class GithubRepo(Base, TimestampMixin):
+    """A GitHub repository tracked for a dev project: latest numbers plus sync status.
 
+    History is not kept here. Every sync also upserts one ProjectDownload row per
+    project per UTC day (platform "github") holding the project-wide totals.
+    """
+
+    __tablename__ = "dev_github_repos"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)  # "owner/name"
+    star_count: Mapped[Optional[int]] = mapped_column(nullable=True)  # latest stargazers_count
+    download_count: Mapped[Optional[int]] = mapped_column(nullable=True)  # sum of release-asset download_count
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # last successful sync
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

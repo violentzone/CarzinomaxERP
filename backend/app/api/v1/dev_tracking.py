@@ -1,5 +1,6 @@
 """
-Dev tracking module, Query, add, remove and update DevProject, DevInvestment and ProjectDownload
+Dev tracking module, Query, add, remove and update DevProject, DevInvestment, ProjectDownload and GithubRepo
+(tracked repos whose stars / release downloads are refreshed by the scheduler and POST /github_sync)
 """
 from datetime import date as date_type
 from decimal import Decimal
@@ -8,13 +9,14 @@ from traceback import format_exc
 from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette import status
 
 from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
+from app.core.github import parse_repo_full_name, sync_github_repos
 from app.core.log_module import user_log
-from app.models import DevInvestment, DevProject, ProjectDownload, User
+from app.models import DevInvestment, DevProject, GithubRepo, ProjectDownload, User
 
 dev_tracking_router = APIRouter(prefix="/dev_tracking", tags=["Dev Tracking"])
 
@@ -566,3 +568,281 @@ async def delete_download(download_id: int, current_user: User = Depends(get_cur
     except Exception as err:
         log.error(f'Failed to delete project download: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+
+
+# ---------------------------------------------------------------------------
+# GithubRepo
+# ---------------------------------------------------------------------------
+
+async def _find_tracked_repo(db, full_name: str, exclude_id: int | None = None) -> GithubRepo | None:
+    """
+    Find the tracked repo with this name (case-insensitive, GitHub names are), ignoring `exclude_id`
+    Args:
+        db: Database session
+        full_name: Repository "owner/name"
+        exclude_id: Repo ID to leave out of the search (the row being updated)
+
+    Returns:
+        The matching GithubRepo or None
+    """
+    stmt = select(GithubRepo).where(func.lower(GithubRepo.full_name) == full_name.lower())
+    if exclude_id is not None:
+        stmt = stmt.where(GithubRepo.id != exclude_id)
+    repo = await db.scalar(stmt)
+    return repo
+
+
+async def _rename_github_repo(db, repo: GithubRepo, value: str) -> None:
+    """
+    Apply a new repository name and clear the cached numbers so the row never shows another repo's stats
+    Args:
+        db: Database session
+        repo: Tracked repo being updated
+        value: New "owner/name" or github.com URL
+
+    Raises:
+        ValueError: Malformed name, or already tracked by another row
+    """
+    full_name = parse_repo_full_name(value)
+    if await _find_tracked_repo(db, full_name, exclude_id=repo.id):
+        raise ValueError(f"GitHub repo {full_name} is already tracked")
+    if full_name == repo.full_name:
+        return
+    repo.full_name = full_name
+    repo.star_count = None
+    repo.download_count = None
+    repo.last_synced_at = None
+    repo.last_error = None
+
+
+@dev_tracking_router.get("/github_repo_list")
+async def get_github_repo_list(current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Get all tracked GitHub repos with their latest stars, downloads and sync status.
+    Args:
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Jsonified list of GithubRepo objects
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info('Query all GitHub repos')
+    repos = (await db.scalars(select(GithubRepo).order_by(GithubRepo.id))).all()
+    data = []
+    for r in repos:
+        data.append(r.to_dict())
+    log.info(f"{str(len(data))} GitHub repos found")
+
+    response = JSONResponse({"status": "success", "data": data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return response
+
+
+@dev_tracking_router.get("/github_repo/{repo_id}")
+async def get_github_repo(repo_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Get a tracked GitHub repo by id
+    Args:
+        repo_id: The tracked repo to query
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Jsonified GithubRepo object
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info(f'Query GitHub repo ID: {repo_id}')
+
+    repo = await db.get(GithubRepo, repo_id)
+    if not repo:
+        log.warning(f'GitHub repo ID: {repo_id} not found')
+        response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return response
+
+    repo_data = repo.to_dict()
+    log.info(f'Query GitHub repo: {repo_data}')
+
+    response = JSONResponse({"status": "success", "data": repo_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return response
+
+
+class CreateGithubRepo(BaseModel):
+    project_id: int
+    full_name: str  # "owner/name" or a github.com URL
+
+
+class UpdateGithubRepo(BaseModel):
+    project_id: int | None = None
+    full_name: str | None = None
+
+
+@dev_tracking_router.post("/github_repo")
+async def create_github_repo(new_repo: CreateGithubRepo, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Track a GitHub repo for a dev project. Stars and downloads are filled by the next sync.
+    Args:
+        new_repo: Project ID and repository "owner/name" (or github.com URL)
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Response body: {'status': 'success', 'data': repo}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info(f'Track GitHub repo {new_repo.full_name} for project ID: {new_repo.project_id}')
+
+    try:
+        full_name = parse_repo_full_name(new_repo.full_name)
+        project = await db.get(DevProject, new_repo.project_id)
+        if not project:
+            log.warning(f'Dev project ID: {new_repo.project_id} not found')
+            response = JSONResponse({"status": "fail", "error": f"Project with id {new_repo.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return response
+        if await _find_tracked_repo(db, full_name):
+            log.warning(f'GitHub repo {full_name} is already tracked')
+            response = JSONResponse({"status": "fail", "error": f"GitHub repo {full_name} is already tracked"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+            return response
+
+        repo = GithubRepo(project_id=new_repo.project_id, full_name=full_name)
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        repo_data = repo.to_dict()
+        log.info(f'GitHub repo tracked: {repo_data}')
+        response = JSONResponse({"status": "success", "data": repo_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
+        return response
+    except Exception as err:
+        log.error(f'Failed to track GitHub repo: {format_exc()}')
+        response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+
+
+@dev_tracking_router.put("/github_repo/{repo_id}")
+async def update_github_repo(repo_id: int, new_repo: UpdateGithubRepo, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Update a tracked GitHub repo by id (partial). Renaming clears its cached numbers until the next sync.
+    Args:
+        repo_id: Tracked repo ID to update
+        new_repo: New project ID and/or repository name
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info(f'Update GitHub repo ID: {repo_id}')
+
+    old_repo = await db.get(GithubRepo, repo_id)
+    if not old_repo:
+        log.warning(f'GitHub repo ID: {repo_id} not found')
+        response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return response
+
+    if new_repo.project_id is not None:
+        project = await db.get(DevProject, new_repo.project_id)
+        if not project:
+            log.warning(f'Dev project ID: {new_repo.project_id} not found')
+            response = JSONResponse({"status": "fail", "error": f"Project with id {new_repo.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+            return response
+
+    try:
+        if new_repo.project_id is not None:
+            old_repo.project_id = new_repo.project_id
+        if new_repo.full_name is not None:
+            await _rename_github_repo(db, old_repo, new_repo.full_name)
+        await db.commit()
+        await db.refresh(old_repo)
+        log.info(f'GitHub repo updated: {old_repo.to_dict()}')
+        response = JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return response
+    except Exception as err:
+        log.error(f'Failed to update GitHub repo: {format_exc()}')
+        response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+
+
+@dev_tracking_router.delete("/github_repo/{repo_id}")
+async def delete_github_repo(repo_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Stop tracking a GitHub repo by id (its past daily snapshots stay in dev_project_downloads)
+    Args:
+        repo_id: Tracked repo ID to delete
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info(f'Delete GitHub repo ID: {repo_id}')
+
+    repo = await db.get(GithubRepo, repo_id)
+    if not repo:
+        log.warning(f'GitHub repo ID: {repo_id} not found')
+        response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return response
+
+    try:
+        await db.delete(repo)
+        await db.commit()
+        log.info(f'GitHub repo deleted ID: {repo_id}')
+        response = JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return response
+    except Exception as err:
+        log.error(f'Failed to delete GitHub repo: {format_exc()}')
+        response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+
+
+@dev_tracking_router.post("/github_sync/{repo_id}")
+@dev_tracking_router.post("/github_sync")
+async def github_sync(repo_id: int | None = None, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Manually refresh stars and release downloads from GitHub, for one tracked repo or for all of them.
+
+    Without the path segment `repo_id` is an optional query parameter. Every refreshed project gets
+    today's `github` snapshot in dev_project_downloads created or updated in place. A repo whose
+    fetch fails is reported in `failed` with its `last_error`; the others still succeed.
+    Args:
+        repo_id: Tracked repo to refresh, None for all
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Response body: {'status': 'success', 'data': {'synced': [repo, ...], 'failed': [repo, ...]}}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('dev', current_user.id, db):
+        response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return response
+    log.info(f'Manual GitHub sync requested for repo ID: {repo_id if repo_id is not None else "all"}')
+
+    if repo_id is not None and not await db.get(GithubRepo, repo_id):
+        log.warning(f'GitHub repo ID: {repo_id} not found')
+        response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        return response
+
+    try:
+        result = await sync_github_repos(db, repo_id, log)
+        response = JSONResponse({"status": "success", "data": {"synced": result.synced, "failed": result.failed}}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return response
+    except Exception as err:
+        log.error(f'GitHub sync failed: {format_exc()}')
+        response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response

@@ -41,4 +41,5 @@ dependencies = [
     "langchain-litellm>=0.9.0",
     "langgraph-supervisor>=0.0.31",
     "psycopg[binary]>=3.3.6",
+    "httpx>=0.28.1",
 ]
