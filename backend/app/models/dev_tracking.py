@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, Date, DateTime, Text, ForeignKey
+from sqlalchemy import BigInteger, String, Numeric, Date, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -34,7 +34,7 @@ class ProjectDownload(Base, TimestampMixin):
     project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     platform: Mapped[str] = mapped_column(String(50), default="github", nullable=False)  # github, dockerhub, npm
-    download_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    download_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # release totals exceed int32
     star_count: Mapped[Optional[int]] = mapped_column(nullable=True)
 
 
@@ -51,6 +51,6 @@ class GithubRepo(Base, TimestampMixin):
     project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)  # "owner/name"
     star_count: Mapped[Optional[int]] = mapped_column(nullable=True)  # latest stargazers_count
-    download_count: Mapped[Optional[int]] = mapped_column(nullable=True)  # sum of release-asset download_count
+    download_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)  # sum of release-asset download_count
     last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # last successful sync
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

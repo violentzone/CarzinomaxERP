@@ -10,6 +10,7 @@ from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from app.api.common import get_current_user, permission_check
@@ -574,7 +575,7 @@ async def delete_download(download_id: int, current_user: User = Depends(get_cur
 # GithubRepo
 # ---------------------------------------------------------------------------
 
-async def _find_tracked_repo(db, full_name: str, exclude_id: int | None = None) -> GithubRepo | None:
+async def _find_tracked_repo(db: AsyncSession, full_name: str, exclude_id: int | None = None) -> GithubRepo | None:
     """
     Find the tracked repo with this name (case-insensitive, GitHub names are), ignoring `exclude_id`
     Args:
@@ -592,7 +593,7 @@ async def _find_tracked_repo(db, full_name: str, exclude_id: int | None = None) 
     return repo
 
 
-async def _rename_github_repo(db, repo: GithubRepo, value: str) -> None:
+async def _rename_github_repo(db: AsyncSession, repo: GithubRepo, value: str) -> None:
     """
     Apply a new repository name and clear the cached numbers so the row never shows another repo's stats
     Args:
