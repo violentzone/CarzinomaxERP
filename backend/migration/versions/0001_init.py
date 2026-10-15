@@ -126,6 +126,21 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_attendance_logs_id'), 'attendance_logs', ['id'], unique=False)
+    op.create_table('dev_github_repos',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('project_id', sa.Integer(), nullable=False),
+    sa.Column('full_name', sa.String(length=255), nullable=False),
+    sa.Column('star_count', sa.Integer(), nullable=True),
+    sa.Column('download_count', sa.BigInteger(), nullable=True),
+    sa.Column('last_synced_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('last_error', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['project_id'], ['dev_projects.project_id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_dev_github_repos_full_name'), 'dev_github_repos', ['full_name'], unique=True)
+    op.create_index(op.f('ix_dev_github_repos_id'), 'dev_github_repos', ['id'], unique=False)
     op.create_table('dev_investments',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('date', sa.Date(), nullable=False),
@@ -145,7 +160,7 @@ def upgrade() -> None:
     sa.Column('project_id', sa.Integer(), nullable=False),
     sa.Column('date', sa.Date(), nullable=False),
     sa.Column('platform', sa.String(length=50), nullable=False),
-    sa.Column('download_count', sa.Integer(), nullable=False),
+    sa.Column('download_count', sa.BigInteger(), nullable=False),
     sa.Column('star_count', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
@@ -202,6 +217,9 @@ def downgrade() -> None:
     op.drop_table('dev_project_downloads')
     op.drop_index(op.f('ix_dev_investments_id'), table_name='dev_investments')
     op.drop_table('dev_investments')
+    op.drop_index(op.f('ix_dev_github_repos_id'), table_name='dev_github_repos')
+    op.drop_index(op.f('ix_dev_github_repos_full_name'), table_name='dev_github_repos')
+    op.drop_table('dev_github_repos')
     op.drop_index(op.f('ix_attendance_logs_id'), table_name='attendance_logs')
     op.drop_table('attendance_logs')
     op.drop_index(op.f('ix_users_id'), table_name='users')

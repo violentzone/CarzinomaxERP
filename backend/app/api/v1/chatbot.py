@@ -1,7 +1,9 @@
 import json
 import traceback
+from uuid import uuid4
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
+from langgraph.types import Command
 from starlette import status
 from datetime import datetime
 
@@ -38,26 +40,59 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
     """
     Webpage agent call this endpoint
     Args:
-        payload: New user message plus prior turns; only the last MAX_HISTORY_MESSAGES are kept
+        payload: New user message (or a decision on a pending approval) plus prior turns; only the last MAX_HISTORY_MESSAGES are kept
         current_user: Current user sends message to chatbox
 
     Returns:
-        NDJSON stream of the orchestrator agent's reply tokens
+        NDJSON stream of the orchestrator agent's reply tokens; an `interrupt` event means a delete is waiting for `decision`
     """
 
     log = user_log(str(current_user.id))
     start_time = datetime.now()
-    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message}')
-    history = [m.model_dump() for m in payload.history[-MAX_HISTORY_MESSAGES:]]
-    formatted_user_input = {'messages': history + [{'role': 'user', 'content': payload.message}]}
+    if not payload.message and payload.decision is None:
+        return JSONResponse({'status': 'fail', 'error': 'Either message or decision is required'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+
+    # Thread is prefixed with the caller's id so nobody can resume another user's paused run
+    thread_id = payload.thread_id or str(uuid4())
+    config = {'configurable': {'thread_id': f'{current_user.id}:{thread_id}'}}
     orchestrator = init_orchestrator(current_user.id)
+    state = await orchestrator.aget_state(config)
+    pending_actions = sum(len(i.value['action_requests']) for i in state.interrupts)
+
+    if payload.decision is not None:
+        if not pending_actions:
+            return JSONResponse({'status': 'fail', 'error': 'No approval is pending on this conversation'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} answers pending approval with: {payload.decision}')
+        graph_input = Command(resume={'decisions': [{'type': payload.decision}] * pending_actions})
+    else:
+        if pending_actions:
+            return JSONResponse({'status': 'fail', 'error': 'An approval is pending; approve or reject it first'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message}')
+        if state.values.get('messages'):
+            # The checkpoint already holds this conversation; only the new turn is needed
+            graph_input = {'messages': [{'role': 'user', 'content': payload.message}]}
+        else:
+            # Fresh thread (or backend restarted): rebuild from the client's history
+            history = [m.model_dump() for m in payload.history[-MAX_HISTORY_MESSAGES:]]
+            graph_input = {'messages': history + [{'role': 'user', 'content': payload.message}]}
+
     async def stream_reply():
         try:
-            async for chunk, metadata in orchestrator.astream(formatted_user_input, stream_mode='messages'):
-                # Only the orchestrator's own model tokens; skip tool results from the tools node
-                if metadata.get('langgraph_node') != 'model' or not chunk.content:
+            async for mode, chunk in orchestrator.astream(graph_input, config=config, stream_mode=['messages', 'updates']):
+                if mode == 'updates':
+                    if '__interrupt__' in chunk:
+                        actions = [
+                            {'name': a['name'], 'args': a['args'], 'description': a.get('description', '')}
+                            for interrupt in chunk['__interrupt__'] for a in interrupt.value['action_requests']
+                        ]
+                        log.info(f'Chatbox paused for approval: {[a["name"] for a in actions]}')
+                        yield json.dumps({'type': 'interrupt', 'actions': actions}) + '\n'
                     continue
-                yield json.dumps({'type': 'token', 'content': chunk.content}) + '\n'
+                message, metadata = chunk
+                # Only the orchestrator's own model tokens; skip tool results and the sub-agents' nested model calls
+                if metadata.get('langgraph_node') != 'model' or '|' in metadata.get('langgraph_checkpoint_ns', '') or not message.content:
+                    continue
+                yield json.dumps({'type': 'token', 'content': message.content}) + '\n'
             yield json.dumps({'type': 'done'}) + '\n'
             log.info(f'Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
         except Exception:

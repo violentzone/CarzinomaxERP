@@ -1,5 +1,5 @@
 /**
- * Low-level API client for the Carzinomax ERP backend.
+ * Low-level API client for the Carzinomax DEV backend.
  *
  * The backend speaks a small envelope protocol:
  *   - success  → `{ "status": "success", "data": ... }` (data omitted on update/delete)

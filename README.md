@@ -1,6 +1,6 @@
 <div align="center">
 
-# CarzinomaxERP
+# Carzinomax DEV
 
 ### The open-source ERP where AI does the data entry.
 
@@ -27,7 +27,7 @@ Existing ERPs (Odoo, ERPNext, SAP) are powerful but assume you have a **team of
 people to feed them data** — someone to type in invoices, reconcile payments,
 and categorize every expense. Solo founders and tiny teams don't have that.
 
-CarzinomaxERP flips it: the ERP does the paperwork **for** you. You hand it a
+Carzinomax DEV flips it: the ERP does the paperwork **for** you. You hand it a
 document; the AI does the busywork and asks you to confirm. The goal is an ERP
 that a two-person company can actually run without hiring a bookkeeper.
 
@@ -41,7 +41,7 @@ You:  *forwards a $340 AWS invoice*
 AI:   Booked it. Here's what I did:
       • Created expense       INV-AWS-0725  ·  $340.00
       • Categorized to        investment · Cloud (AWS)
-      • Linked to project     carzinomax-erp
+      • Linked to project     carzinomax-dev
       • Due date              2026-08-14  → flagged
       Want me to schedule the payment for the 12th?
 ```
@@ -60,13 +60,14 @@ wired in but not yet driving any feature.
 |------|--------|-------|
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
-| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm) |
+| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads) |
 | **Finance** | 🚧 Minimal | Typed expense ledger (paycheck / petty cash / investment / other). The Finance overview rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM router** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm): hosted APIs or a local server. Connection is verified at startup; chat, streaming and schema-validated (parsed) calls are ready |
-| **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. No AI-driven endpoints yet |
-| **Background scheduler** | 🚧 Scaffolded | APScheduler starts with the app; no jobs registered yet (monthly payroll run is planned) |
+| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart) |
+| **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. Not built yet |
+| **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h). Monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
 future AI agent share one contract:
@@ -109,6 +110,7 @@ cd CarzinomaxERP/backend
 cp .env.example .env
 #   ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
+#   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
 
 # Install dependencies
 uv sync
@@ -165,9 +167,9 @@ backend/
 │   ├── main.py            # App entrypoint: startup banner, admin seed, LLM check, scheduler
 │   ├── api/
 │   │   ├── common/        # get_current_user (JWT) and per-module permission_check
-│   │   └── v1/            # Routers: auth, hr, finance, scm, dev_tracking
-│   ├── ai_service/        # LlmRouter — litellm wrapper: model_check, chat, stream_chat, parsed_chat
-│   ├── core/              # config (pydantic-settings), database, security, scheduler, log_module
+│   │   └── v1/            # Routers: auth, hr, finance, scm, dev_tracking, chatbot
+│   ├── ai_service/        # LlmRouter (litellm wrapper), chat orchestrator + sub-agents, tool_store (one tool per CRUD op), prompts/
+│   ├── core/              # config (pydantic-settings), database, security, scheduler, log_module, github (stars/downloads sync)
 │   ├── models/            # SQLAlchemy 2.0 ORM models
 │   └── schemas/           # Pydantic request/response schemas
 ├── migration/             # Alembic environment + versions
@@ -193,7 +195,8 @@ All routes live under `/api/v1` and, except for login, expect an
 | `/hr` | users (employees), departments, attendance, leave requests, paychecks |
 | `/finance` | expenses |
 | `/scm` | products |
-| `/dev_tracking` | projects, investments, downloads |
+| `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
+| `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision` |
 
 Lists are `GET /<module>/<thing>_list`; single records are
 `/<module>/<thing>/{id}` with `POST` (create), `PUT` (partial update) and
@@ -204,8 +207,10 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Auth with per-module access flags and token revocation
 - [x] People & Payroll — departments, attendance, leave, paychecks
 - [x] Dev Tracking — projects, investments, adoption snapshots
+- [x] GitHub stars / release-download sync on the scheduler, with a manual refresh endpoint
 - [x] React frontend
 - [x] LLM router with startup health check
+- [x] Chat control of every module (read / create / update, approval-gated delete)
 - [ ] **AI "receipt → booked" flow** (flagship demo)
 - [ ] Finance: amounts, vendors, dates and due-date tracking on expenses
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)

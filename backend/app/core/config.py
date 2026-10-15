@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     
     # Payroll/Paycheck calculation timespot (cron expression)
     PAYCHECK_CALCULATE_TIMESPOT: str = "0 0 1 * *"
+
+    # GitHub stars/downloads sync (app/core/github.py, scheduler job "github_sync")
+    GITHUB_TOKEN: str = ""                 # optional PAT; required for private repos, lifts the limit to 5000 req/h
+    GITHUB_SYNC_CRON: str = "0 */6 * * *"  # crontab; APScheduler counts day-of-week from Monday = 0
     
     # Async database URL computed automatically
     ASYNC_DATABASE_URL: str = ""

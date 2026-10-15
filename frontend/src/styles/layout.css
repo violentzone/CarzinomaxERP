@@ -322,6 +322,20 @@
   border-bottom-left-radius: var(--r-xs);
 }
 .chat-error { font-size: 13px; color: var(--danger); }
+.chat-approval {
+  margin: 0 var(--s-5) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  font-size: 13px;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+  color: var(--text-h);
+}
+.chat-approval-head { display: flex; align-items: center; gap: var(--s-2); color: var(--danger); }
+.chat-approval-list { margin: var(--s-2) 0; padding-left: var(--s-4); display: flex; flex-direction: column; gap: var(--s-1); }
+.chat-approval-list code { font-size: 12px; }
+.chat-approval-args { margin-left: var(--s-2); color: var(--text-dim); overflow-wrap: anywhere; }
+.chat-approval-actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
 .chat-foot {
   display: flex;
   align-items: flex-end;

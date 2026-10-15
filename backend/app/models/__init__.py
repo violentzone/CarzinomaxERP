@@ -14,6 +14,7 @@ from app.models.dev_tracking import (
     DevProject,
     DevInvestment,
     ProjectDownload,
+    GithubRepo,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "DevProject",
     "DevInvestment",
     "ProjectDownload",
+    "GithubRepo",
 ]
