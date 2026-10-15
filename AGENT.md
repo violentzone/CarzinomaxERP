@@ -29,7 +29,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 
 ### 4. Finance ([models/finance.py](backend/app/models/finance.py), [api/v1/finance.py](backend/app/api/v1/finance.py))
 * Minimal. `Finance` has a UUID id, an `expense_type` enum (`paycheck`, `petty_cash`, `investment`, `other`) and a required `amount` (Numeric 15,2; present in `0001_init`). No vendors or dates yet.
-* **Gap:** the REST request models `CreateExpense` / `UpdateExpense` and the frontend form only send `expense_type`, so `POST /finance/expense` currently fails on the NOT NULL `amount`. Only the chat tools (`create_expense`, `update_expense`) set `amount`. The frontend Finance overview still derives totals from paychecks, investments and products.
+* **Gap:** the frontend Finance form only sends `expense_type`, so creating an expense from the UI returns 422 on the required `amount`. The REST request models `CreateExpense` / `UpdateExpense` and the chat tools (`create_expense`, `update_expense`) all send `amount`. The frontend Finance overview still derives totals from paychecks, investments and products.
 
 ### 5. Purchases / SCM ([models/scm.py](backend/app/models/scm.py), [api/v1/scm.py](backend/app/api/v1/scm.py))
 * Minimal. `Product` (sku, name, description, unit_price, cost). No vendors, warehouses or purchase orders.
@@ -60,7 +60,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * Details in [frontend/README.md](frontend/README.md) (does not mention the chat drawer yet).
 
 ### ⚠️ Known gaps (do not build on these)
-* `POST /finance/expense` fails: model/migration require `amount`, router and frontend do not send it (see §4).
+* Creating an expense from the frontend fails: `amount` is required but the Finance form does not send it (see §4).
 * `app/schemas/finance.py`, `scm.py`, `hr.py`, `dev_tracking.py` describe tables from the old version (GL accounts, journal entries, invoices, fixed assets, payments, product categories, dev worker paychecks). They are re-exported by `schemas/__init__.py` but **used by nothing**. Routers define their own request models inline.
 * `LlmRouter` (`ai_service/llm_router.py`) has no callers.
 * `app/middleware/` is an empty package; `langgraph-supervisor` is in `pyproject.toml` but never imported.
