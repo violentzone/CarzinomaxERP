@@ -6,7 +6,7 @@ import Badge from '../../components/ui/Badge'
 import ResourceSection from '../../components/ResourceSection'
 import { Select } from '../../components/ui/Field'
 import { financeApi, EXPENSE_TYPES } from '../../api/finance'
-import { dateTime, shortId, titleize } from '../../lib/format'
+import { currency, dateTime, shortId, titleize } from '../../lib/format'
 import FinanceOverview from './FinanceOverview'
 
 const TABS = [
@@ -75,7 +75,7 @@ function LedgerSection() {
       updateTitle="Edit expense"
       remove={(row) => financeApi.deleteExpense(row.id)}
       removeLabel="expense"
-      removeHint={(r) => `${titleize(r.expense_type)} · ${shortId(r.id)} · ${dateTime(r.created_at)}`}
+      removeHint={(r) => `${titleize(r.expense_type)} · ${currency(r.amount)} · ${shortId(r.id)} · ${dateTime(r.created_at)}`}
       emptyHint="Record your first expense to start the ledger."
       emptyIcon={BookOpen}
       modalSize="sm"
@@ -98,6 +98,7 @@ function LedgerSection() {
       columns={[
         { key: 'id', header: 'Ref', render: (r) => <span className="mono muted" title={r.id}>{shortId(r.id)}</span> },
         { key: 'expense_type', header: 'Type', render: (r) => <Badge status={r.expense_type} /> },
+        { key: 'amount', header: 'Amount', align: 'right', render: (r) => <span className="cell-num">{currency(r.amount)}</span> },
         { key: 'hint', header: 'Meaning', render: (r) => <span className="cell-sub">{TYPE_HINTS[r.expense_type] || '—'}</span> },
         { key: 'created_at', header: 'Recorded', render: (r) => dateTime(r.created_at) },
         { key: 'updated_at', header: 'Updated', render: (r) => <span className="muted">{dateTime(r.updated_at)}</span> },
@@ -111,7 +112,16 @@ function LedgerSection() {
           full: true,
           options: TYPE_OPTIONS,
           default: 'other',
-          hint: 'The ledger classifies each expense; amounts live with the paycheck or investment it refers to.',
+          hint: 'The ledger classifies each expense by type.',
+        },
+        {
+          key: 'amount',
+          label: 'Amount',
+          type: 'number',
+          step: '0.01',
+          min: 0,
+          required: true,
+          full: true,
         },
       ]}
     />

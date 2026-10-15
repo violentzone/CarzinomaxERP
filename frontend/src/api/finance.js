@@ -1,8 +1,8 @@
 /**
  * Finance endpoints: /api/v1/finance
  *
- * The finance ledger is a typed expense log: each record has a UUID and an
- * `expense_type` of `paycheck | petty_cash | investment | other`.
+ * The finance ledger is a typed expense log: each record has a UUID, an
+ * `expense_type` of `paycheck | petty_cash | investment | other` and an `amount`.
  */
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 

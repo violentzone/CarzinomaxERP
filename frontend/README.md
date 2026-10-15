@@ -99,9 +99,9 @@ token) clears the session and returns you to the login screen.
   deductions) on save unless you type a value. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
   new log at "now", or closes their latest open log and fills `total_hours`.
-- **Finance** — the ledger only classifies expenses by type; the Overview tab
-  pulls amounts from paychecks, investments and the product catalog, showing
-  only what your flags allow.
+- **Finance** — the ledger records each expense's type and amount; the Overview
+  tab pulls its totals from paychecks, investments and the product catalog,
+  showing only what your flags allow.
 - **Purchases** — the SCM router is a product catalog (SKU, cost, list price).
 
 ## Accessibility & motion
