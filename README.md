@@ -60,7 +60,7 @@ wired in but not yet driving any feature.
 |------|--------|-------|
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
-| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads) |
+| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
 | **Finance** | 🚧 Minimal | Typed expense ledger (paycheck / petty cash / investment / other). The Finance overview rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |

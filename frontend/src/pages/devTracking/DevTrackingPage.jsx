@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { LineChart, FolderKanban, Cloud, Download, Star } from 'lucide-react'
+import { LineChart, FolderKanban, Cloud, Download, Star, GitBranch, ExternalLink } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import Tabs from '../../components/ui/Tabs'
 import ResourceSection from '../../components/ResourceSection'
@@ -10,12 +10,13 @@ import { Select } from '../../components/ui/Field'
 import { devApi, INVESTMENT_CATEGORIES, DOWNLOAD_PLATFORMS } from '../../api/devTracking'
 import { useList } from '../../lib/useList'
 import { projectStats, downloadSeries } from '../../lib/devStats'
-import { num, currency, compactCurrency, number, compactNumber, date as fmtDate, titleize, today, parseDate } from '../../lib/format'
+import { num, currency, compactCurrency, number, compactNumber, date as fmtDate, dateTime, titleize, today, parseDate } from '../../lib/format'
 
 const TABS = [
   { key: 'projects', label: 'Projects', icon: FolderKanban },
   { key: 'investments', label: 'Investments', icon: Cloud },
   { key: 'downloads', label: 'Downloads', icon: Download },
+  { key: 'repos', label: 'GitHub repos', icon: GitBranch },
 ]
 
 const CATEGORIES = INVESTMENT_CATEGORIES.map((v) => ({ value: v, label: titleize(v) }))
@@ -61,6 +62,7 @@ export default function DevTrackingPage() {
         {tab === 'downloads' && (
           <DownloadsSection key={tick} projectOptions={projectOptions} projectName={projectName} onChanged={refresh} />
         )}
+        {tab === 'repos' && <GithubReposSection key={tick} projectOptions={projectOptions} projectName={projectName} />}
       </div>
     </div>
   )
@@ -379,6 +381,75 @@ function DownloadsSection({ projectOptions, projectName, onChanged }) {
         { key: 'platform', label: 'Platform', type: 'select', options: PLATFORMS, default: 'github' },
         { key: 'download_count', label: 'Downloads', type: 'number', min: 0, step: '1', required: true, default: 0 },
         { key: 'star_count', label: 'Stars', type: 'number', min: 0, step: '1', nullable: true },
+      ]}
+    />
+  )
+}
+
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Repos the backend's GitHub sync follows. List + add only: the numbers come
+ * from the sync (null until it has run once), and removing / renaming a repo
+ * or triggering a sync is still API-only.
+ */
+function GithubReposSection({ projectOptions, projectName }) {
+  const syncBadge = (r) => {
+    if (r.last_error) return <Badge tone="danger">Error</Badge>
+    if (r.last_synced_at) return <Badge tone="success">Synced</Badge>
+    return <Badge status="pending" />
+  }
+
+  return (
+    <ResourceSection
+      title="GitHub repos"
+      subtitle="Repositories the GitHub sync follows; their stars and release downloads feed the Downloads tab."
+      moduleName="Dev Tracking"
+      fetcher={() => devApi.listGithubRepos()}
+      create={devApi.createGithubRepo}
+      createLabel="Track repo"
+      createTitle="Track a GitHub repository"
+      emptyHint="Track the first repository; stars and downloads are filled by the next sync."
+      emptyIcon={GitBranch}
+      rowsTransform={(rows) => [...rows].sort((a, b) => a.full_name.localeCompare(b.full_name))}
+      columns={[
+        {
+          key: 'full_name',
+          header: 'Repository',
+          render: (r) => (
+            <a className="cell-strong" href={`https://github.com/${r.full_name}`} target="_blank" rel="noreferrer">
+              {r.full_name}
+              <ExternalLink size={12} style={{ verticalAlign: -1, marginLeft: 4 }} />
+            </a>
+          ),
+        },
+        { key: 'project_id', header: 'Project', render: (r) => projectName(r.project_id) },
+        { key: 'star_count', header: 'Stars', align: 'right', render: (r) => <span className="cell-num">{r.star_count == null ? '—' : number(r.star_count)}</span> },
+        { key: 'download_count', header: 'Downloads', align: 'right', render: (r) => <span className="cell-num">{r.download_count == null ? '—' : number(r.download_count)}</span> },
+        { key: 'last_synced_at', header: 'Last synced', render: (r) => <span className="muted">{r.last_synced_at ? dateTime(r.last_synced_at) : '—'}</span> },
+        {
+          key: 'status',
+          header: 'Status',
+          render: (r) => (
+            <div className="col">
+              {syncBadge(r)}
+              {r.last_error && <span className="cell-sub">{r.last_error}</span>}
+            </div>
+          ),
+        },
+      ]}
+      fields={[
+        {
+          key: 'project_id',
+          label: 'Project',
+          type: 'select',
+          numeric: true,
+          required: true,
+          full: true,
+          options: projectOptions,
+          placeholder: projectOptions.length ? 'Select a project…' : 'Create a project first',
+        },
+        { key: 'full_name', label: 'Repository', required: true, full: true, placeholder: 'owner/name or https://github.com/owner/name' },
       ]}
     />
   )

@@ -840,7 +840,7 @@ async def github_sync(repo_id: int | None = None, current_user: User = Depends(g
         return response
 
     try:
-        result = await sync_github_repos(db, repo_id, log)
+        result = await sync_github_repos(db, repo_id)
         response = JSONResponse({"status": "success", "data": {"synced": result.synced, "failed": result.failed}}, status_code=status.HTTP_200_OK, media_type='application/json')
         return response
     except Exception as err:
