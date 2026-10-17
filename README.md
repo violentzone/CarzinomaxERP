@@ -60,7 +60,7 @@ wired in but not yet driving any feature.
 |------|--------|-------|
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
-| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads) |
+| **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
 | **Finance** | 🚧 Minimal | Typed expense ledger (paycheck / petty cash / investment / other). The Finance overview rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
@@ -95,52 +95,60 @@ four.
 - **Scheduling:** APScheduler (async)
 - **Logging:** loguru, with a system log plus one log file per user
 - **Frontend:** React 19 + Vite, react-router, Framer Motion, Recharts, lucide-react (no axios — a small `fetch` wrapper)
+- **Deploy:** Docker Compose — pgvector-enabled Postgres, the backend, and the built frontend behind nginx, from one file
 
 ## 🚀 Quickstart
 
-**Prerequisites:** Python 3.14+, PostgreSQL, [uv](https://github.com/astral-sh/uv), and Node 20+ for the frontend.
+**Prerequisites:** Docker with Compose v2.23 or newer. Nothing else — Python,
+Node and PostgreSQL all live inside the containers.
 
-### 1. Backend
+### 1. Configure
 
 ```bash
 git clone https://github.com/violentzone/CarzinomaxERP.git
-cd CarzinomaxERP/backend
+cd CarzinomaxERP
 
-# Configure — copy the example and fill in your values
-cp .env.example .env
-#   ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
+# App settings and secrets — copy the example and fill in your values
+cp backend/.env.example backend/.env
+#   ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
+#   ADMIN_DB_CONNECTION can stay as-is — Compose points the backend at the bundled database
 
-# Install dependencies
-uv sync
-
-# Create the database schema
-uv run alembic upgrade head
-
-# Run
-uv run uvicorn app.main:app --reload
+# Compose settings — optional: Postgres credentials and host ports
+cp .env.example .env
 ```
-
-Then open **http://localhost:8000/docs** for the interactive API docs. On first
-start the app seeds the admin user from your `.env` and pings the configured
-LLM. If the LLM check fails it is logged and the rest of the ERP keeps working.
 
 > **Note:** never commit your real `.env`. `SECRET_KEY` has no default on purpose —
 > the app refuses to start with a guessable key so tokens can't be forged.
 
-### 2. Frontend
+### 2. Run
 
 ```bash
-cd ../frontend
-npm install
-npm run dev        # http://localhost:5173
+docker compose up --build
 ```
 
-The Vite dev server proxies `/api` to `http://localhost:8000`, so no CORS setup
-is needed in development. Sign in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` from
-`backend/.env`. For a production build, set `VITE_API_BASE_URL` (see
-`frontend/.env.example`) and run `npm run build`.
+Then open **http://localhost:5173** for the app and **http://localhost:8000/docs**
+for the interactive API docs. Sign in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+from `backend/.env`. On first start the backend creates the schema, seeds the
+admin user and pings the configured LLM. If the LLM check fails it is logged
+and the rest of the ERP keeps working.
+
+| Service | Image | What it does |
+|---------|-------|--------------|
+| `db` | `pgvector/pgvector:pg17` | PostgreSQL with the `vector` extension created on first start; data lives in the `pgdata` volume |
+| `backend` | built from `backend/` | Runs `alembic upgrade head`, then uvicorn on port 8000 |
+| `frontend` | built from `frontend/` | Vite production build served by nginx, which proxies `/api` to the backend so the app is same-origin |
+
+- `backend/.env` is loaded into the backend container as-is, except
+  `ADMIN_DB_CONNECTION`, which Compose points at the `db` service for you.
+- The root `.env` holds only Compose-level settings: `POSTGRES_USER` /
+  `POSTGRES_PASSWORD` / `POSTGRES_DB` and the host ports `DB_PORT`, `BACKEND_PORT`,
+  `FRONTEND_PORT` (defaults 5432, 8000, 5173). Every value is optional.
+- Postgres credentials are applied when the `pgdata` volume is first created.
+  `docker compose down -v` removes the volume — and all data — so the next start
+  begins fresh.
+- Backend logs are written to `backend/logs/` on the host.
 
 ### 3. Pick an LLM
 
@@ -155,13 +163,20 @@ LLM_API_KEY="sk-..."
 # Self-hosted (Ollama, vLLM, LM Studio, any OpenAI-compatible server)
 LLM_TYPE="local"
 LLM_MODEL="ollama/llama3"                  # or openai/<model> for OpenAI-compatible servers
-LLM_API_BASE="http://127.0.0.1:11434"
+LLM_API_BASE="http://host.docker.internal:11434"   # a server on the host machine; 127.0.0.1 would be the container itself
 LLM_API_KEY=""                             # some local servers want a dummy value
 ```
+
+`host.docker.internal` resolves to the host machine on Docker Desktop (Windows,
+macOS). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the
+`backend` service in `docker-compose.yml`.
 
 ## 📁 Project structure
 
 ```text
+docker-compose.yml         # Full stack: pgvector Postgres, backend, frontend (nginx) — see Quickstart
+.env.example               # Compose-level settings: Postgres credentials, host ports
+
 backend/
 ├── app/
 │   ├── main.py            # App entrypoint: startup banner, admin seed, LLM check, scheduler
@@ -222,6 +237,44 @@ Lists are `GET /<module>/<thing>_list`; single records are
 This is an early, build-in-public project — issues, ideas, and PRs are all
 welcome. If the vision resonates, the most helpful thing you can do right now is
 **⭐ star the repo** and open an issue with what you'd want an AI-run ERP to do.
+
+<details>
+<summary><b>Local development without Docker</b> — hot reload, tests and a debugger</summary>
+
+**Prerequisites:** Python 3.14+, [uv](https://github.com/astral-sh/uv), Node 20+,
+and a PostgreSQL to point at. The compose database works fine for this:
+`docker compose up db` exposes it on `localhost:5432`.
+
+**Backend**
+
+```bash
+cd backend
+cp .env.example .env
+#   Same variables as the Docker setup, but ADMIN_DB_CONNECTION must now be reachable
+#   from the host, e.g. postgresql://carzinomax:carzinomax@localhost:5432/carzinomax
+#   for the compose database (match the POSTGRES_* values in your root .env).
+
+uv sync                       # install dependencies
+uv run alembic upgrade head   # create the schema
+uv run uvicorn app.main:app --reload
+```
+
+API docs at **http://localhost:8000/docs**. First start seeds the admin user and
+pings the LLM, exactly as in Docker.
+
+**Frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173
+```
+
+The Vite dev server proxies `/api` to `http://localhost:8000`, so no CORS setup
+is needed. For a production build outside Docker, set `VITE_API_BASE_URL` (see
+`frontend/.env.example`) and run `npm run build`.
+
+</details>
 
 ## 📄 License
 
