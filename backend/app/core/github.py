@@ -20,7 +20,7 @@ from app.models.dev_tracking import GithubRepo, ProjectDownload
 GITHUB_API = 'https://api.github.com'  # Base URL for all GitHub REST API requests
 GITHUB_API_VERSION = '2026-03-10'  # API version sent in the X-GitHub-Api-Version request header
 GITHUB_PLATFORM = 'github'  # Platform identifier stored in ProjectDownload rows
-USER_AGENT = 'CarzinomaxERP-github-sync/0.1'  # User-Agent header required by the GitHub REST API
+USER_AGENT = 'carzinomax-dev-github-sync/0.1'  # User-Agent header required by the GitHub REST API
 TIMEOUT_SECONDS = 10.0  # Per-request HTTP timeout in seconds for the httpx client
 PER_PAGE = 100  # Number of releases requested per page when paginating the releases endpoint
 MAX_RELEASE_PAGES = 50  # Upper bound on release pages fetched per repo (caps at 5,000 releases)

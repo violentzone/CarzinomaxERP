@@ -222,7 +222,7 @@ wheels = [
 ]
 
 [[package]]
-name = "carzinomaxerp"
+name = "carzinomax-dev"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

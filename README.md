@@ -105,8 +105,8 @@ Node and PostgreSQL all live inside the containers.
 ### 1. Configure
 
 ```bash
-git clone https://github.com/violentzone/CarzinomaxERP.git
-cd CarzinomaxERP
+git clone https://github.com/violentzone/carzinomax-dev.git
+cd carzinomax-dev
 
 # App settings and secrets — copy the example and fill in your values
 cp backend/.env.example backend/.env
