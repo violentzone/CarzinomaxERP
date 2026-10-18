@@ -29,7 +29,7 @@ export default function Sidebar({ open, onNavigate }) {
         <div className="brand-mark">C</div>
         <div>
           <div className="brand-name">Carzinomax</div>
-          <div className="brand-sub">ERP</div>
+          <div className="brand-sub">Dev</div>
         </div>
       </div>
 

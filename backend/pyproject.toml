@@ -1,5 +1,5 @@
 [project]
-name = "carzinomaxerp"
+name = "carzinomax-dev"
 version = "0.1.0"
 description = "The open-source ERP where AI does the data entry."
 readme = "README.md"

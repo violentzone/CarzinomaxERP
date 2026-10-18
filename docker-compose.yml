@@ -15,7 +15,7 @@
 #
 # Needs Docker Compose v2.23+ (dockerfile_inline and configs.content).
 
-name: carzinomaxerp
+name: carzinomax-dev
 
 services:
   db:
