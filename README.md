@@ -65,7 +65,7 @@ wired in but not yet driving any feature.
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM router** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm): hosted APIs or a local server. Connection is verified at startup; chat, streaming and schema-validated (parsed) calls are ready |
-| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart) |
+| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF can be attached to a message and the assistant reads it (the configured model must accept image input, see "Pick an LLM"); booking an expense from it is still planned |
 | **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. Not built yet |
 | **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h). Monthly payroll run is still planned |
 
@@ -112,6 +112,7 @@ cd carzinomax-dev
 cp backend/.env.example backend/.env
 #   ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
+#   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (chat attachments; default backend/uploads and 10 MB per file)
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
 #   ADMIN_DB_CONNECTION can stay as-is — Compose points the backend at the bundled database
 
@@ -148,7 +149,7 @@ and the rest of the ERP keeps working.
 - Postgres credentials are applied when the `pgdata` volume is first created.
   `docker compose down -v` removes the volume — and all data — so the next start
   begins fresh.
-- Backend logs are written to `backend/logs/` on the host.
+- Backend logs are written to `backend/logs/` and chat attachments to `backend/uploads/` on the host.
 
 ### 3. Pick an LLM
 
@@ -162,10 +163,15 @@ LLM_API_KEY="sk-..."
 
 # Self-hosted (Ollama, vLLM, LM Studio, any OpenAI-compatible server)
 LLM_TYPE="local"
-LLM_MODEL="ollama/llama3"                  # or openai/<model> for OpenAI-compatible servers
+LLM_MODEL="ollama/llama3.2-vision"         # or openai/<model> for OpenAI-compatible servers
 LLM_API_BASE="http://host.docker.internal:11434"   # a server on the host machine; 127.0.0.1 would be the container itself
 LLM_API_KEY=""                             # some local servers want a dummy value
 ```
+
+**The model must accept image input (vision).** Receipts attached in the chat are
+sent to it as images and there is no text-only fallback, so pick a vision model on
+self-hosted servers too (`llama3.2-vision`, not a text-only `llama3`). PDFs are sent
+as extracted text and work with any model.
 
 `host.docker.internal` resolves to the host machine on Docker Desktop (Windows,
 macOS). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the
@@ -211,7 +217,7 @@ All routes live under `/api/v1` and, except for login, expect an
 | `/finance` | expenses |
 | `/scm` | products |
 | `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
-| `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision` |
+| `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision`. `POST /upload` — stores one attachment (PNG / JPEG / WebP / PDF, 10 MB) whose `id` goes into `chatbox` `attachments` |
 
 Lists are `GET /<module>/<thing>_list`; single records are
 `/<module>/<thing>/{id}` with `POST` (create), `PUT` (partial update) and
@@ -226,6 +232,7 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] React frontend
 - [x] LLM router with startup health check
 - [x] Chat control of every module (read / create / update, approval-gated delete)
+- [x] Chat attachments: a receipt image or PDF attached in the chat is read by the assistant
 - [ ] **AI "receipt → booked" flow** (flagship demo)
 - [ ] Finance: amounts, vendors, dates and due-date tracking on expenses
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)

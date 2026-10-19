@@ -46,11 +46,12 @@ Sign in with the admin seeded by the backend on first boot (the `ADMIN_EMAIL` /
 
 ```
 src/
-  api/            One module per backend router (auth, hr, finance, scm, devTracking)
+  api/            One module per backend router (auth, hr, finance, scm, devTracking, chatbot)
   components/
     ui/           Design-system kit: Button, Card, StatCard, Table, Modal, Tabs,
                   Badge, Field, ConfirmDialog, EmptyState, Toast, …
     layout/       AppLayout (shell), Sidebar (permission-gated nav), topbar
+    chat/         ChatPanel (assistant drawer: transcript, approval card, composer with attachments)
     ResourceSection.jsx   Generic list + create / edit / delete section
     SchemaForm.jsx        Schema-driven form + payload builder
     ProtectedRoute.jsx
@@ -109,6 +110,12 @@ token) clears the session and returns you to the login screen.
   tab pulls its totals from paychecks, investments and the product catalog,
   showing only what your flags allow.
 - **Purchases** — the SCM router is a product catalog (SKU, cost, list price).
+- **Assistant** — the chat drawer (topbar button) streams the orchestrator's reply;
+  deletes pause for your approval. The paperclip or a pasted image attaches
+  PNG / JPEG / WebP / PDF files (5 per message, 10 MB each, one image); they upload first
+  (`POST /chatbot/upload`) and the assistant reads them with that turn only. A
+  new conversation or a backend restart drops them, so re-attach to re-read.
+  State lives in `lib/useChat.js`.
 
 ## Accessibility & motion
 

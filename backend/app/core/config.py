@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""
     LLM_API_KEY: str = ""
 
+    # Chat attachments (app/core/uploads.py, POST /chatbot/upload): stored on disk under <UPLOAD_DIR>/<user_id>/, no table, kept forever
+    UPLOAD_DIR: str = "uploads"               # relative to backend/ unless absolute
+    UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024  # per file on the wire, before images are downscaled
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

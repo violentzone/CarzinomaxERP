@@ -42,4 +42,6 @@ dependencies = [
     "langgraph-supervisor>=0.0.31",
     "psycopg[binary]>=3.3.6",
     "httpx>=0.28.1",
+    "pillow>=13.0.0",
+    "pypdf>=6.21.1",
 ]

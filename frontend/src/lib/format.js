@@ -44,6 +44,14 @@ export function compactNumber(v) {
   return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(num(v))
 }
 
+/** Human file size: "820 KB", "2.4 MB". */
+export function fileSize(bytes) {
+  const n = num(bytes)
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /** Format an ISO date / datetime string as e.g. "Jul 6, 2026". */
 export function date(v) {
   if (!v) return '—'

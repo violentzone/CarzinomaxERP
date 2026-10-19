@@ -1,14 +1,16 @@
+import asyncio
 import json
 import traceback
 from uuid import uuid4
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.types import Command
 from starlette import status
 from datetime import datetime
 
-from app.ai_service.agents import llm, init_orchestrator
+from app.ai_service.agents import ATTACHMENT_ONLY_MESSAGE, attachment_blocks, llm, init_orchestrator
 from app.core.log_module import user_log
+from app.core.uploads import save_attachment
 from app.models.auth import User
 from app.schemas.chatbot import ChatboxRequest
 from app.api.common import get_current_user
@@ -17,6 +19,7 @@ from app.api.common import get_current_user
 chatbot_router = APIRouter(prefix='/chatbot', tags=['Chatbot'])
 
 MAX_HISTORY_MESSAGES = 10  # 5 turns: 5 user + 5 assistant messages
+MAX_ATTACHMENTS = 5  # files per chat turn, the frontend enforces the same number
 
 
 @chatbot_router.post('/', status_code=status.HTTP_200_OK)
@@ -35,6 +38,35 @@ async def health_check(user_id: int):
         log.error(f'Error: {traceback.format_exc()}')
     return response
 
+@chatbot_router.post('/upload', status_code=status.HTTP_201_CREATED)
+async def upload_attachment(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """
+    Store one chat attachment (PNG, JPEG, WebP or PDF) for the caller; the returned id goes into `ChatboxRequest.attachments`
+    Args:
+        file: Multipart field `file`; the type is sniffed from the bytes, the declared content type is ignored
+        current_user: Owner of the attachment, files are stored under the caller's own directory
+
+    Returns:
+        Response body: {'status': 'success', 'data': attachment}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    log.info(f'Uploads attachment {file.filename} ({file.content_type}, {file.size} bytes)')
+
+    try:
+        attachment = await save_attachment(current_user.id, file)
+    except ValueError as err:
+        log.warning(f'Attachment rejected: {err}')
+        response = JSONResponse({'status': 'fail', 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+    except Exception:
+        log.error(f'Failed to store attachment: {traceback.format_exc()}')
+        response = JSONResponse({'status': 'fail', 'error': 'Could not store the attachment'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, media_type='application/json')
+        return response
+    attachment_data = attachment.model_dump()
+    log.info(f'Attachment stored: {attachment_data}')
+    response = JSONResponse({'status': 'success', 'data': attachment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
+    return response
+
 @chatbot_router.post('/chatbox', status_code=status.HTTP_200_OK)
 async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_current_user)):
     """
@@ -49,8 +81,21 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
 
     log = user_log(str(current_user.id))
     start_time = datetime.now()
-    if not payload.message and payload.decision is None:
-        return JSONResponse({'status': 'fail', 'error': 'Either message or decision is required'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+    if not payload.message and not payload.attachments and payload.decision is None:
+        return JSONResponse({'status': 'fail', 'error': 'Either message, attachments or decision is required'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+    if payload.decision is not None and payload.attachments:
+        response = JSONResponse({'status': 'fail', 'error': 'Attachments need a message, not a decision'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+    if len(payload.attachments) > MAX_ATTACHMENTS:
+        response = JSONResponse({'status': 'fail', 'error': f'At most {MAX_ATTACHMENTS} attachments per message'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
+    # Attachments are resolved before the orchestrator exists so a bad id is a plain 400, not a stream event
+    try:
+        blocks = await asyncio.to_thread(attachment_blocks, current_user.id, payload.attachments)
+    except ValueError as err:
+        log.warning(f'Attachment rejected: {err}')
+        response = JSONResponse({'status': 'fail', 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+        return response
 
     # Thread is prefixed with the caller's id so nobody can resume another user's paused run
     thread_id = payload.thread_id or str(uuid4())
@@ -67,14 +112,16 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
     else:
         if pending_actions:
             return JSONResponse({'status': 'fail', 'error': 'An approval is pending; approve or reject it first'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message}')
+        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message} (attachments: {payload.attachments})')
+        # Attachments turn the user turn into a block list; a plain text turn keeps the string form
+        user_message = {'role': 'user', 'content': [{'type': 'text', 'text': payload.message or ATTACHMENT_ONLY_MESSAGE}] + blocks if blocks else payload.message}
         if state.values.get('messages'):
             # The checkpoint already holds this conversation; only the new turn is needed
-            graph_input = {'messages': [{'role': 'user', 'content': payload.message}]}
+            graph_input = {'messages': [user_message]}
         else:
-            # Fresh thread (or backend restarted): rebuild from the client's history
+            # Fresh thread (or backend restarted): rebuild from the client's history, attachments of earlier turns are not replayed
             history = [m.model_dump() for m in payload.history[-MAX_HISTORY_MESSAGES:]]
-            graph_input = {'messages': history + [{'role': 'user', 'content': payload.message}]}
+            graph_input = {'messages': history + [user_message]}
 
     async def stream_reply():
         try:
@@ -97,6 +144,7 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
             log.info(f'Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
         except Exception:
             log.error(f'Error: {traceback.format_exc()}')
-            yield json.dumps({'type': 'error', 'message': 'Error when try to send to LLM'}) + '\n'
+            hint = ' (the configured model may not accept image input)' if payload.attachments else ''
+            yield json.dumps({'type': 'error', 'message': f'Error when try to send to LLM{hint}'}) + '\n'
 
     return StreamingResponse(stream_reply(), media_type='application/x-ndjson')

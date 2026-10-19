@@ -68,7 +68,7 @@ async def github_get(client: httpx.AsyncClient, path: str, params: dict | None =
     """
     GET one GitHub API path and return the decoded JSON body
     Args:
-        client: Client built by `sync_github_repos` (base URL, headers, timeout)
+        client: Client built by `github_client` (base URL, headers, timeout)
         path: API path, e.g. '/repos/owner/name'
         params: Query parameters, None if not needed
 
@@ -111,11 +111,24 @@ async def github_get(client: httpx.AsyncClient, path: str, params: dict | None =
     raise ValueError(message)
 
 
+def github_client() -> httpx.AsyncClient:
+    """
+    Build the GitHub REST API client, `GITHUB_TOKEN` is sent as a bearer token when set
+    Returns:
+        Client to open with `async with`
+    """
+    headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': GITHUB_API_VERSION, 'User-Agent': USER_AGENT}
+    if settings.GITHUB_TOKEN:
+        headers['Authorization'] = f'Bearer {settings.GITHUB_TOKEN}'
+    client = httpx.AsyncClient(base_url=GITHUB_API, headers=headers, timeout=TIMEOUT_SECONDS, follow_redirects=True)
+    return client
+
+
 async def fetch_repo_stats(client: httpx.AsyncClient, full_name: str) -> GithubRepoStats:
     """
     Fetch the star count and the release-asset download total of one repository
     Args:
-        client: Client built by `sync_github_repos`
+        client: Client built by `github_client`
         full_name: Repository 'owner/name'
 
     Returns:
@@ -143,6 +156,23 @@ async def fetch_repo_stats(client: httpx.AsyncClient, full_name: str) -> GithubR
         if page > MAX_RELEASE_PAGES:
             raise ValueError(f'more than {MAX_RELEASE_PAGES * PER_PAGE} releases, giving up')
     stats = GithubRepoStats(full_name=full_name, star_count=star_count, download_count=download_count)
+    return stats
+
+
+async def fetch_repo_stats_once(full_name: str) -> GithubRepoStats:
+    """
+    Fetch the stats of one repository with a client opened for this call only, for callers outside a sync run such as the `create_github_repo` chat tool
+    Args:
+        full_name: Repository 'owner/name'
+
+    Returns:
+        `GithubRepoStats` of the repository
+
+    Raises:
+        ValueError: GitHub could not be reached, refused the request or answered with an unexpected payload
+    """
+    async with github_client() as client:
+        stats = await fetch_repo_stats(client, full_name)
     return stats
 
 
@@ -188,10 +218,6 @@ async def sync_github_repos(db: AsyncSession, repo_id: int | None = None) -> Git
     Returns:
         `GithubSyncResult`, refreshed rows in `synced`, rows whose fetch failed in `failed` (`last_error` set, old numbers kept)
     """
-    headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': GITHUB_API_VERSION, 'User-Agent': USER_AGENT}
-    if settings.GITHUB_TOKEN:
-        headers['Authorization'] = f'Bearer {settings.GITHUB_TOKEN}'
-
     async with sync_lock:
         stmt = select(GithubRepo).order_by(GithubRepo.id)
         if repo_id is not None:
@@ -201,7 +227,7 @@ async def sync_github_repos(db: AsyncSession, repo_id: int | None = None) -> Git
         synced: list[GithubRepo] = []
         failed: list[GithubRepo] = []
 
-        async with httpx.AsyncClient(base_url=GITHUB_API, headers=headers, timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
+        async with github_client() as client:
             for repo in repos:
                 try:
                     stats = await fetch_repo_stats(client, repo.full_name)

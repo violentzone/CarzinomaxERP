@@ -14,3 +14,5 @@ class ChatboxRequest(BaseModel):
     # Client-generated conversation id; the paused run of an approval is stored under it
     thread_id: str | None = None
     decision: Literal['approve', 'reject'] | None = None
+    # Ids returned by POST /chatbot/upload, read by the model with this turn only
+    attachments: list[str] = Field(default_factory=list)

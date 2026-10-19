@@ -1,7 +1,10 @@
+import base64
+from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langchain.agents.middleware import AgentMiddleware, HumanInTheLoopMiddleware, ModelRequest, ModelResponse
+from langchain_core.messages import AnyMessage, HumanMessage
 from langchain_litellm import ChatLiteLLM
 from langchain.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
@@ -11,6 +14,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.ai_service import tool_store
 from app.core.database import SyncSessionLocal
+from app.core.uploads import IMAGE_TYPES, extract_pdf_text, load_attachment
 from app.models.auth import User
 
 PROMPTS_DIR = Path(__file__).parent / 'prompts'
@@ -76,6 +80,7 @@ dev_helper_agent = create_agent(
         tool_store.get_dev_project, tool_store.create_dev_project, tool_store.update_dev_project,
         tool_store.get_dev_investment, tool_store.create_dev_investment, tool_store.update_dev_investment,
         tool_store.get_project_downloads, tool_store.create_project_download, tool_store.update_project_download,
+        tool_store.create_github_repo,
     ],
 )
 
@@ -109,7 +114,7 @@ def call_scm_helper_agent(query: str):
     )
     return result['messages'][-1].content
 
-@tool('dev_helper', description='Agent that reads, creates and updates Dev Tracking data: projects, investments, download snapshots')
+@tool('dev_helper', description='Agent that reads, creates and updates Dev Tracking data: projects, investments, download snapshots, and starts tracking GitHub repos')
 def call_dev_helper_agent(query: str):
     result = dev_helper_agent.invoke({
         'messages': [
@@ -148,6 +153,76 @@ def caller_context(caller: User) -> str:
     )
 
 
+ATTACHMENT_ONLY_MESSAGE = '(no message, see the attachment)'  # text block of a turn that carries files without words
+IMAGE_GONE_MESSAGE = '[image no longer attached]'  # replaces the image block of an earlier turn in the model request
+
+
+def attachment_blocks(user_id: int, attachment_ids: list[str]) -> list[dict]:
+    """
+    Turn the caller's uploaded files into content blocks appended to the user turn
+    Args:
+        user_id: Caller, files are looked up under the caller's own upload directory
+        attachment_ids: Ids from `POST /chatbot/upload`, in the order the user attached them
+
+    Returns:
+        Per attachment a text block naming it, followed by an image block for images; a PDF's extracted text goes inside its text block
+
+    Raises:
+        ValueError: Unknown id, an id of another user, or more than one image (the model reads one image per request)
+    """
+    blocks = []
+    image_count = 0
+    for n, attachment_id in enumerate(attachment_ids, start=1):
+        attachment = load_attachment(user_id, attachment_id)
+        if attachment.content_type in IMAGE_TYPES:
+            image_count += 1
+            if image_count > 1:
+                raise ValueError('Only one image per message, the model reads one image at a time')
+            blocks.append({'type': 'text', 'text': f'<attachment n="{n}" id="{attachment.id}" type="{attachment.content_type}">image follows</attachment>'})
+            blocks.append({'type': 'image', 'base64': base64.b64encode(attachment.data).decode(), 'mime_type': attachment.content_type})
+            continue
+        try:
+            text = extract_pdf_text(attachment.data) or '[no extractable text: this PDF is probably a scan; ask the user for an image of it]'
+        except ValueError:
+            text = '[this PDF could not be read]'
+        blocks.append({'type': 'text', 'text': f'<attachment n="{n}" id="{attachment.id}" type="{attachment.content_type}">\n{text}\n</attachment>'})
+    return blocks
+
+
+def strip_old_images(messages: list[AnyMessage]) -> list[AnyMessage]:
+    """
+    Replace the image blocks of every user turn except the newest one with `IMAGE_GONE_MESSAGE`, so one model request carries at most one image
+    Args:
+        messages: Conversation handed to the model, system prompt excluded
+
+    Returns:
+        The same messages, older user turns copied without image blocks; the checkpoint is not touched
+    """
+    newest_user_turn = max((i for i, message in enumerate(messages) if isinstance(message, HumanMessage)), default=-1)
+    stripped = []
+    for i, message in enumerate(messages):
+        if i == newest_user_turn or not isinstance(message, HumanMessage) or not isinstance(message.content, list):
+            stripped.append(message)
+            continue
+        content = [{'type': 'text', 'text': IMAGE_GONE_MESSAGE} if isinstance(block, dict) and block.get('type') == 'image' else block for block in message.content]
+        stripped.append(message.model_copy(update={'content': content}))
+    return stripped
+
+
+class CurrentImageOnly(AgentMiddleware):
+    """
+    Model-call middleware: a small GPU reads one image per request, so only the newest user turn keeps its image block
+    """
+
+    def wrap_model_call(self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]) -> ModelResponse:
+        response = handler(request.override(messages=strip_old_images(request.messages)))
+        return response
+
+    async def awrap_model_call(self, request: ModelRequest, handler: Callable[[ModelRequest], Awaitable[ModelResponse]]) -> ModelResponse:
+        response = await handler(request.override(messages=strip_old_images(request.messages)))
+        return response
+
+
 def init_orchestrator(user_id: int):
     """
     Create orchestrator, with permitted subagents, subagent are selected by User's `has_finance_access`, `has_scm_access`, `has_hr_access` and `has_dev_access`
@@ -178,8 +253,8 @@ def init_orchestrator(user_id: int):
     if caller.has_dev_access:
         tool_list.append(call_dev_helper_agent)
         delete_tools.extend(DEV_DELETE_TOOLS)
-    # Every delete pauses the run until the user approves or rejects it
-    middleware = []
+    # Older turns lose their image block in every model request; every delete pauses the run until the user approves or rejects it
+    middleware = [CurrentImageOnly()]
     if delete_tools:
         middleware.append(HumanInTheLoopMiddleware(interrupt_on={
             t.name: {'allowed_decisions': ['approve', 'reject'], 'description': f'{t.name} permanently removes a record and needs your approval'}

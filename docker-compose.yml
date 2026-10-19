@@ -67,6 +67,8 @@ services:
     volumes:
       # loguru writes backend/logs/system and backend/logs/users here.
       - ./backend/logs:/app/logs
+      # Chat attachments (app/core/uploads.py) land in backend/uploads/<user_id>/.
+      - ./backend/uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -127,6 +129,7 @@ configs:
           proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto $$scheme;
           proxy_read_timeout 300s;   # LLM chat replies can take a while
+          client_max_body_size 12m;  # chat attachments: UPLOAD_MAX_BYTES (10 MB) plus multipart overhead
         }
 
         # SPA fallback for react-router routes.

@@ -26,7 +26,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 
 ### 3. Dev Tracking ([models/dev_tracking.py](backend/app/models/dev_tracking.py), [api/v1/dev_tracking.py](backend/app/api/v1/dev_tracking.py))
 * `DevProject` (keyed by `project_id`), `DevInvestment` (date, amount, vendor, category: cloud / software_licenses / hardware / consulting), `ProjectDownload` (per-platform download/star snapshots: github, dockerhub, npm). Deleting a project cascades to its investments, snapshots and tracked repos.
-* `GithubRepo` (table `dev_github_repos`: `project_id`, unique `full_name` as `owner/name`, latest `star_count` / `download_count`, `last_synced_at`, `last_error`). `app/core/github.py` fetches `stargazers_count` and the sum of release-asset `download_count` over all releases (httpx; `GITHUB_TOKEN` is optional for public repos and required for private ones) and upserts **one `ProjectDownload` row per project per UTC day** (platform `github`, totals over the project's repos, updated in place; hand edits to that row are overwritten). It runs from the scheduler and from `POST /dev_tracking/github_sync[/{repo_id}]`, which answers `{synced: [...], failed: [...]}`; a repo whose fetch fails keeps its old numbers and stores `last_error`. REST CRUD lives at `/dev_tracking/github_repo…` (renaming a repo clears its cached numbers). No chat tool yet (owner decision).
+* `GithubRepo` (table `dev_github_repos`: `project_id`, unique `full_name` as `owner/name`, latest `star_count` / `download_count`, `last_synced_at`, `last_error`). `app/core/github.py` fetches `stargazers_count` and the sum of release-asset `download_count` over all releases (httpx; `GITHUB_TOKEN` is optional for public repos and required for private ones) and upserts **one `ProjectDownload` row per project per UTC day** (platform `github`, totals over the project's repos, updated in place; hand edits to that row are overwritten). It runs from the scheduler and from `POST /dev_tracking/github_sync[/{repo_id}]`, which answers `{synced: [...], failed: [...]}`; a repo whose fetch fails keeps its old numbers and stores `last_error`. REST CRUD lives at `/dev_tracking/github_repo…` (renaming a repo clears its cached numbers). Chat has `create_github_repo` only (tracks a repo and pulls its numbers right away); list / rename / untrack stay REST-only (owner decision).
 
 ### 4. Finance ([models/finance.py](backend/app/models/finance.py), [api/v1/finance.py](backend/app/api/v1/finance.py))
 * Minimal. `Finance` has a UUID id, an `expense_type` enum (`paycheck`, `petty_cash`, `investment`, `other`) and a required `amount` (Numeric 15,2; present in `0001_init`). No vendors or dates yet.
@@ -39,15 +39,16 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * The live model object is `llm`, a module-level `ChatLiteLLM` in `agents.py` (re-exported from `app.ai_service`). It is built from `LLM_MODEL` / `LLM_API_KEY`, and `LLM_API_BASE` only when `LLM_TYPE == 'local'`.
 * Startup runs `llm.invoke('ping', max_tokens=1)` once; failure is logged and does not block startup. `POST /chatbot/` repeats the same ping on demand (no auth, takes `user_id` as a query param).
 * `LlmRouter` in `llm_router.py` (litellm wrapper with `chat()`, `stream_chat()`, `parsed_chat(response_format=…)`, `model_check()`) is **not referenced anywhere**. Treat it as legacy; new AI code goes through `llm` or the orchestrator.
-* Config: `LLM_TYPE` (`remote` | `local`), `LLM_MODEL` (litellm `<provider>/<model>` naming), `LLM_API_KEY`, `LLM_API_BASE`.
+* Config: `LLM_TYPE` (`remote` | `local`), `LLM_MODEL` (litellm `<provider>/<model>` naming), `LLM_API_KEY`, `LLM_API_BASE`. The model must accept image input: chat attachments are sent as image blocks with no text-only fallback (README, "Pick an LLM").
 
 ### 6b. Chat control ([ai_service/agents.py](backend/app/ai_service/agents.py), [ai_service/tool_store.py](backend/app/ai_service/tool_store.py), [api/v1/chatbot.py](backend/app/api/v1/chatbot.py))
-* `POST /chatbot/chatbox` takes `ChatboxRequest` (`message`, `history`, `thread_id`, `decision`; schema in `app/schemas/chatbot.py`) and streams NDJSON events `token` / `interrupt` / `done` / `error` from a LangChain `create_agent` orchestrator built per request by `init_orchestrator(user_id)`.
+* `POST /chatbot/chatbox` takes `ChatboxRequest` (`message`, `history`, `thread_id`, `decision`, `attachments`; schema in `app/schemas/chatbot.py`) and streams NDJSON events `token` / `interrupt` / `done` / `error` from a LangChain `create_agent` orchestrator built per request by `init_orchestrator(user_id)`.
 * Orchestrator prompt = `prompts/orchestrator_prompt.md` + a `<context>` block (today, caller id, name, four flags). Sub-agent queries are prefixed with today's date (`with_today`) so relative periods resolve.
 * `tool_store.py` holds one `@tool` per operation, get / create / update / delete for every table (40 tools), all sync via `SyncSessionLocal`. Style: a `XxxDetail` row model + `GetXxxOutput` with `total`, filters applied only when not `None`, `None` when nothing matches, `raise ValueError` on bad input. **No logging and no `user_id` parameter in tools**; access is decided by which tools the orchestrator receives. Leave has `review_leave_request` (approve/reject) instead of a generic update.
 * Sub-agents (`hr_helper`, `expanse_helper`, `scm_helper`, `dev_helper`, prompts in `ai_service/prompts/`) own read + create + update and are attached only when the caller has the module flag. `create_leave_request` is attached for every user. Delete tools sit on the orchestrator itself (`*_DELETE_TOOLS` lists) and go through `HumanInTheLoopMiddleware` (approve / reject).
 * Approval state lives in a single in-process `MemorySaver` checkpointer (lost on restart). The client keeps a `thread_id`; the server namespaces it as `<user_id>:<thread_id>` so nobody can resume another user's paused run. A request with `decision` resumes the paused run; a new `message` while an approval is pending is rejected with 400. The client's `history` (last 10 messages) is only used when the checkpoint for the thread is empty.
 * The stream forwards only the orchestrator's own model tokens (`langgraph_node == 'model'`, no nested namespace); sub-agent output and tool results are not streamed.
+* Attachments: `POST /chatbot/upload` (multipart field `file`, auth only, one file per request) sniffs the type from the bytes (PNG / JPEG / WebP / PDF), caps the size at `UPLOAD_MAX_BYTES` (10 MB), re-encodes images as JPEG (at most 1,003,520 pixels, EXIF-rotated) and stores the file as `<UPLOAD_DIR>/<user_id>/<uuid>.<ext>` (`app/core/uploads.py`; no table, kept forever, `uploads/` is gitignored). The returned `id` goes into `ChatboxRequest.attachments` (at most `MAX_ATTACHMENTS` = 5, of which one image). `attachment_blocks` in `agents.py` turns them into content blocks on the user turn: an image block (`{'type': 'image', 'base64', 'mime_type'}`) or the pypdf text inside an `<attachment>` text block. The `CurrentImageOnly` middleware keeps the image block of the newest user turn only, so every model request carries at most one image (small-GPU vision models); older turns show `[image no longer attached]` to the model while the checkpoint stays intact. Attachments reach the orchestrator only (sub-agent queries stay text), are not replayed from `history` after a restart (the client marks such turns with `[attached: name]`), and an unknown or foreign id is a 400 before the stream starts.
 * Adding a tool: write it in `tool_store.py` in the existing style, add it to the right sub-agent list (or the module's `*_DELETE_TOOLS`) in `agents.py`, and describe it in that agent's prompt file.
 * `agents.py` has a `__main__` CLI loop for manual testing: `uv run python -m app.ai_service.agents` from `backend/` (uses user id 1).
 
@@ -58,7 +59,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 ### 8. Frontend ([frontend/](frontend/))
 * React 19 + Vite SPA, complete for every backend module: Dashboard, People & Payroll, Finance, Purchases, Dev Tracking, Users & Access. Framer Motion, Recharts, lucide-react, react-router. Native `fetch` wrapper in `src/lib/api.js` (no axios).
 * Dev Tracking has a fourth tab, **GitHub repos**: lists `dev_github_repos` (stars, downloads, last sync, error) and adds a repo; remove / rename / `github_sync` have no UI yet.
-* Chat assistant: `components/chat/ChatPanel.jsx` (slide-over drawer mounted in `AppLayout`), `lib/useChat.js` (transcript, `send`, `decide`, `reset`, client-generated `thread_id`), `api/chatbot.js` (NDJSON reader over `apiPostStream`).
+* Chat assistant: `components/chat/ChatPanel.jsx` (slide-over drawer mounted in `AppLayout`), `lib/useChat.js` (transcript, `send`, `decide`, `reset`, client-generated `thread_id`), `api/chatbot.js` (NDJSON reader over `apiPostStream`, `upload` over `apiPostForm`). The composer's paperclip or a pasted image attaches PNG / JPEG / WebP / PDF files (5 per message, 10 MB each); they upload before the turn streams and show as chips / thumbnails in the user bubble.
 * Vite dev server proxies `/api` → `http://localhost:8000`. Sidebar is gated by the user's module flags. 403 shows an in-page "Restricted" panel; 401 clears the session.
 * Details in [frontend/README.md](frontend/README.md) (does not mention the chat drawer yet).
 
@@ -90,6 +91,7 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │   ├── migration/                       # Alembic env + versions (0001_init is the baseline and the only revision)
 │   ├── pyproject.toml / uv.lock         # Source of truth for deps; requirements.txt is a pip export
 │   ├── logs/                            # Runtime logs (gitignored): system/system.log, users/<id>/user.log
+│   ├── uploads/                         # Chat attachments (gitignored): <user_id>/<uuid>.<ext>
 │   └── app/
 │       ├── main.py                      # Lifespan: banner, admin seed, LLM ping, scheduler; CORS; /health
 │       ├── ai_service/
@@ -107,14 +109,15 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │       │       ├── finance.py           # /finance: expenses
 │       │       ├── scm.py               # /scm: products
 │       │       ├── dev_tracking.py      # /dev_tracking: projects, investments, downloads, github_repo, github_sync
-│       │       └── chatbot.py           # /chatbot: LLM ping, NDJSON chatbox stream
+│       │       └── chatbot.py           # /chatbot: LLM ping, attachment upload, NDJSON chatbox stream
 │       ├── core/
 │       │   ├── config.py                # pydantic-settings; derives ASYNC_DATABASE_URL (asyncpg)
 │       │   ├── database.py              # async engine + SessionLocal/get_db; sync engine (psycopg) + SyncSessionLocal/get_sync_db
 │       │   ├── github.py                # GitHub stars/downloads fetch + sync_github_repos (scheduler job and manual endpoint)
 │       │   ├── log_module.py            # system_log() / user_log(user_id) on loguru
 │       │   ├── scheduler.py             # APScheduler start/stop + the github_sync job
-│       │   └── security.py              # JWT create/decode, bcrypt hashing
+│       │   ├── security.py              # JWT create/decode, bcrypt hashing
+│       │   └── uploads.py               # Chat attachments: sniff type, store, downscale images, load, PDF text
 │       ├── middleware/                  # Empty package (unused)
 │       ├── models/                      # SQLAlchemy 2.0 models
 │       │   ├── base.py                  # Base (with to_dict()) + TimestampMixin
@@ -152,7 +155,7 @@ Requires Python 3.14+, PostgreSQL, and [uv](https://github.com/astral-sh/uv). Ru
 
 ```bash
 cd backend
-cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*; optional GITHUB_TOKEN / GITHUB_SYNC_CRON
+cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*; optional GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
 uv sync
 uv run alembic upgrade head # tables are created ONLY by Alembic; startup does not create_all
 uv run uvicorn app.main:app --reload

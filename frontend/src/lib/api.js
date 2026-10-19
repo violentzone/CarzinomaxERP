@@ -154,3 +154,16 @@ export async function apiPostStream(path, body, { signal } = {}) {
   if (!res.ok) await parse(res)
   return res
 }
+
+/**
+ * POST a `FormData` body (file upload). No Content-Type header: the browser
+ * sets the multipart boundary. Goes through `parse` like `apiPost`.
+ */
+export function apiPostForm(path, formData, { signal } = {}) {
+  return fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+    signal,
+  }).then((r) => parse(r))
+}

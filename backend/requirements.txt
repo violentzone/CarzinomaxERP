@@ -57,11 +57,15 @@ openai==2.45.0
 orjson==3.12.0
 ormsgpack==1.12.2
 packaging==26.2
+pillow==13.0.0
 propcache==0.5.2
+psycopg==3.3.6
+psycopg-binary==3.3.6 ; implementation_name != 'pypy'
 pydantic==2.13.4
 pydantic-core==2.46.4
 pydantic-settings==2.14.2
 pyjwt==2.13.0
+pypdf==6.21.1
 python-dotenv==1.2.2
 python-multipart==0.0.32
 pyyaml==6.0.3

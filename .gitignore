@@ -15,6 +15,7 @@ env/
 # Logs & runtime data
 logs/
 *.log
+uploads/
 
 # IDE / editor
 .idea/

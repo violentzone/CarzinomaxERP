@@ -1,14 +1,16 @@
+import asyncio
 from langchain.tools import tool
 from pydantic import BaseModel
-from sqlalchemy import select
-from datetime import datetime, date as date_type
+from sqlalchemy import func, select
+from datetime import datetime, date as date_type, timezone
 from typing import Literal
 from uuid import UUID
 
 from app.core.database import SyncSessionLocal
+from app.core.github import fetch_repo_stats_once, parse_repo_full_name
 from app.core.security import get_password_hash
 from app.models.auth import User
-from app.models.dev_tracking import DevInvestment, DevProject, ProjectDownload
+from app.models.dev_tracking import DevInvestment, DevProject, GithubRepo, ProjectDownload
 from app.models.finance import ExpenseType, Finance
 from app.models.hr import AttendanceLog, Department, LeaveRequest, Paycheck
 from app.models.scm import Product
@@ -1534,3 +1536,48 @@ def delete_paycheck(paycheck_id: int) -> DeleteOutput:
         session.commit()
 
     return DeleteOutput(id=paycheck_id, message=f'Paycheck {paycheck_id} deleted')
+
+class GithubRepoDetail(BaseModel):
+    id: int
+    project_id: int
+    full_name: str
+    star_count: int | None
+    download_count: int | None
+    last_synced_at: datetime | None
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
+
+@tool
+def create_github_repo(project_id: int, full_name: str) -> GithubRepoDetail:
+    """
+    Tracks a new GitHub repo for a dev project in database table "dev_github_repos" and pulls its star count and release download count right away; a failed pull keeps the repo tracked with the reason in `last_error` and the next scheduled sync retries it
+    Args:
+        project_id: ID of the dev project the repo belongs to, must exist
+        full_name: Repository "owner/name" or its github.com URL, must not already be tracked
+
+    Returns:
+        The created repo tracking record with the pulled counts, counts are None and `last_error` is set when the pull failed
+    """
+    repo_name = parse_repo_full_name(full_name)
+
+    with SyncSessionLocal() as session:
+        if session.get(DevProject, project_id) is None:
+            raise ValueError(f'Dev project with id {project_id} not found')
+        existing_repo = session.execute(select(GithubRepo).where(func.lower(GithubRepo.full_name) == repo_name.lower())).scalar_one_or_none()
+        if existing_repo is not None:
+            raise ValueError(f'GitHub repo {repo_name} is already tracked')
+
+        repo = GithubRepo(project_id=project_id, full_name=repo_name)
+        try:
+            stats = asyncio.run(fetch_repo_stats_once(repo_name))
+            repo.star_count = stats.star_count
+            repo.download_count = stats.download_count
+            repo.last_synced_at = datetime.now(timezone.utc)
+        except ValueError as err:
+            repo.last_error = str(err)
+        session.add(repo)
+        session.commit()
+        session.refresh(repo)
+
+    return GithubRepoDetail.model_validate(repo, from_attributes=True)
