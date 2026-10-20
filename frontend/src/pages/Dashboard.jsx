@@ -16,14 +16,14 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts'
-import { FolderKanban, Cloud, HandCoins, Users, Download, CalendarDays, Boxes, BookOpen, TrendingDown, ArrowRight } from 'lucide-react'
+import { FolderKanban, Cloud, HandCoins, Users, Download, CalendarDays, Boxes, BookOpen, TrendingDown, ArrowRight, Star, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { devApi } from '../api/devTracking'
 import { hrApi } from '../api/hr'
 import { financeApi } from '../api/finance'
 import { scmApi } from '../api/scm'
 import { projectStats, downloadSeries } from '../lib/devStats'
-import { num, currency, compactCurrency, number, compactNumber, date as fmtDate, monthKey, monthLabel, titleize, userName, daysBetween, CHART_COLORS } from '../lib/format'
+import { num, currency, compactCurrency, number, compactNumber, date as fmtDate, dateTime, monthKey, monthLabel, titleize, userName, daysBetween, CHART_COLORS } from '../lib/format'
 import { staggerContainer } from '../lib/motion'
 import { modulesFor, MODULE_LABELS } from '../lib/roles'
 import StatCard from '../components/ui/StatCard'
@@ -50,10 +50,11 @@ export default function Dashboard() {
     let alive = true
     const want = (mod, fn) => (can(mod) ? safe(fn(), null) : Promise.resolve(null))
     ;(async () => {
-      const [projects, investments, downloads, users, paychecks, leaves, expenses, products] = await Promise.all([
+      const [projects, investments, downloads, repos, users, paychecks, leaves, expenses, products] = await Promise.all([
         want('dev', devApi.listProjects),
         want('dev', devApi.listInvestments),
         want('dev', devApi.listDownloads),
+        want('dev', devApi.listGithubRepos),
         want('hr', hrApi.listUsers),
         want('hr', hrApi.listPaychecks),
         want('hr', hrApi.listLeaves),
@@ -61,7 +62,7 @@ export default function Dashboard() {
         want('scm', scmApi.listProducts),
       ])
       if (!alive) return
-      setData({ projects, investments, downloads, users, paychecks, leaves, expenses, products })
+      setData({ projects, investments, downloads, repos, users, paychecks, leaves, expenses, products })
       setLoading(false)
     })()
     return () => {
@@ -77,7 +78,7 @@ export default function Dashboard() {
     )
   }
 
-  const { projects, investments, downloads, users, paychecks, leaves, expenses, products } = data
+  const { projects, investments, downloads, repos, users, paychecks, leaves, expenses, products } = data
   const modules = modulesFor(user)
 
   // --- derive KPIs ---
@@ -124,6 +125,11 @@ export default function Dashboard() {
     .map((p) => ({ ...p, ...stats_[String(p.project_id)] }))
     .sort((a, b) => b.downloads - a.downloads || b.spend - a.spend)
     .slice(0, 6)
+
+  // GitHub stars: latest synced count per tracked repo; unsynced repos count as 0 and sort last
+  const projectName = (id) => (projects || []).find((p) => String(p.project_id) === String(id))?.project_name || `#${id}`
+  const repoRows = [...(repos || [])].sort((a, b) => (b.star_count ?? -1) - (a.star_count ?? -1) || a.full_name.localeCompare(b.full_name))
+  const githubStars = repoRows.reduce((s, r) => s + num(r.star_count), 0)
 
   const firstName = (user?.full_name || user?.email || '').split(/[\s@]/)[0] || 'there'
 
@@ -179,6 +185,8 @@ export default function Dashboard() {
             )}
           </Card>
         )}
+
+        {repos && <GithubStarsCard rows={repoRows} total={githubStars} projectName={projectName} />}
 
         {downloads && (
           <Card className="chart-card">
@@ -318,5 +326,54 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+  )
+}
+
+/** Tracked GitHub repos with their latest star counts and the total across all of them. */
+function GithubStarsCard({ rows, total, projectName }) {
+  return (
+    <Card className="chart-card">
+      <div className="row spread">
+        <h3>
+          <Star size={15} style={{ verticalAlign: -2, marginRight: 6 }} />
+          GitHub stars
+        </h3>
+        <Link to="/dev-tracking" className="muted row gap-1" style={{ fontSize: 13 }}>
+          GitHub repos <ArrowRight size={13} />
+        </Link>
+      </div>
+      {rows.length ? (
+        <>
+          <div className="summary-row" style={{ marginBottom: 'var(--s-3)' }}>
+            <div className="summary-tile accent">
+              <span className="sum-k">Total stars</span>
+              <span className="sum-v">{number(total)}</span>
+              <span className="sum-hint">{rows.length} repos tracked</span>
+            </div>
+          </div>
+          <Table
+            columns={[
+              {
+                key: 'full_name',
+                header: 'Repository',
+                render: (r) => (
+                  <a className="cell-strong" href={`https://github.com/${r.full_name}`} target="_blank" rel="noreferrer">
+                    {r.full_name}
+                    <ExternalLink size={12} style={{ verticalAlign: -1, marginLeft: 4 }} />
+                  </a>
+                ),
+              },
+              { key: 'project_id', header: 'Project', render: (r) => projectName(r.project_id) },
+              { key: 'star_count', header: 'Stars', align: 'right', render: (r) => <span className="cell-num">{r.star_count == null ? '—' : number(r.star_count)}</span> },
+              { key: 'last_synced_at', header: 'Last synced', render: (r) => <span className="muted">{r.last_synced_at ? dateTime(r.last_synced_at) : '—'}</span> },
+            ]}
+            rows={rows}
+            rowKey={(r) => r.id}
+          />
+        </>
+      ) : (
+        <div className="chart-empty">Track a repository in Dev Tracking to see stars</div>
+      )}
+    </Card>
   )
 }

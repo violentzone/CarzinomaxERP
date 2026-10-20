@@ -101,7 +101,9 @@ token) clears the session and returns you to the login screen.
   those rows are overwritten at the next sync. The **GitHub repos** tab lists
   the repositories that sync follows (latest stars, downloads, last sync and
   error) and adds new ones by `owner/name` or URL; a new repo shows dashes
-  until the next sync. Removing or renaming a repo and "sync now" are API-only.
+  until the next sync. The dashboard's **GitHub stars** card repeats the list
+  with the total across every tracked repo. Removing or renaming a repo and
+  "sync now" are API-only.
 - **People & Payroll** — paychecks recompute `net_pay` (base + allowances −
   deductions) on save unless you type a value. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a

@@ -58,7 +58,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 
 ### 8. Frontend ([frontend/](frontend/))
 * React 19 + Vite SPA, complete for every backend module: Dashboard, People & Payroll, Finance, Purchases, Dev Tracking, Users & Access. Framer Motion, Recharts, lucide-react, react-router. Native `fetch` wrapper in `src/lib/api.js` (no axios).
-* Dev Tracking has a fourth tab, **GitHub repos**: lists `dev_github_repos` (stars, downloads, last sync, error) and adds a repo; remove / rename / `github_sync` have no UI yet.
+* Dev Tracking has a fourth tab, **GitHub repos**: lists `dev_github_repos` (stars, downloads, last sync, error) and adds a repo; remove / rename / `github_sync` have no UI yet. The dashboard shows the same rows plus the star total in a **GitHub stars** card.
 * Chat assistant: `components/chat/ChatPanel.jsx` (slide-over drawer mounted in `AppLayout`), `lib/useChat.js` (transcript, `send`, `decide`, `reset`, client-generated `thread_id`), `api/chatbot.js` (NDJSON reader over `apiPostStream`, `upload` over `apiPostForm`). The composer's paperclip or a pasted image attaches PNG / JPEG / WebP / PDF files (5 per message, 10 MB each); they upload before the turn streams and show as chips / thumbnails in the user bubble.
 * Vite dev server proxies `/api` → `http://localhost:8000`. Sidebar is gated by the user's module flags. 403 shows an in-page "Restricted" panel; 401 clears the session.
 * Details in [frontend/README.md](frontend/README.md) (does not mention the chat drawer yet).
