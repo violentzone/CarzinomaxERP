@@ -3,5 +3,34 @@ Summary to give administrator insight of data status, generate about 300 words o
 
 ## HR
 How many user
+How many user active and how many inactive
+How many administrator with all four module access
+How many user per module access (finance, scm, hr, dev)
+How many department and how many without a manager
+How many attendance log today and how many still clocked in without clock out
+Total working hours this month
+How many leave request pending and how old the oldest pending one is
+How many user on approved leave today
+How many paycheck draft and how many paid
+Total net pay paid this month and the next payment date of a draft paycheck
 
 ## Finance
+How many expense record and the total amount
+Total amount per expense type (paycheck, petty_cash, investment, other)
+Total amount this month compared with last month
+Largest single expense
+When the newest expense was recorded
+
+## SCM
+How many product
+Average unit price, average cost and average margin
+How many product priced below cost
+How many product without description
+
+## Dev Tracking
+How many project and how many without a tracked GitHub repo
+Total investment and investment this month
+Total investment per category (cloud, software_licenses, hardware, consulting)
+How many tracked GitHub repo, total stars and total downloads
+When the last GitHub sync ran and how many repo have a sync error
+How many download snapshot and the date of the newest one
