@@ -1,7 +1,6 @@
 import base64
 from collections.abc import Awaitable, Callable
 from datetime import date
-from pathlib import Path
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, HumanInTheLoopMiddleware, ModelRequest, ModelResponse
 from langchain_core.messages import AnyMessage, HumanMessage
@@ -15,20 +14,8 @@ from app.core.config import settings
 from app.ai_service import tool_store
 from app.core.database import SyncSessionLocal
 from app.core.uploads import IMAGE_TYPES, extract_pdf_text, load_attachment
+from app.core.util_store import load_prompt
 from app.models.auth import User
-
-PROMPTS_DIR = Path(__file__).parent / 'prompts'
-
-
-def load_prompt(name: str) -> str:
-    """
-    Read a prompt file from `app/ai_service/prompts/`.
-    Args:
-        name: File name including extension, e.g. 'orchestrator_system.md'
-    Returns:
-        Prompt text with surrounding whitespace stripped
-    """
-    return (PROMPTS_DIR / name).read_text(encoding='utf-8').strip()
 
 
 def with_today(query: str) -> str:
