@@ -13,7 +13,7 @@ from app.core.github import sync_github_repos
 from app.core.log_module import system_log
 from app.core.util_store import load_prompt
 from app.ai_service.llm_router import LlmRouter
-from app.models import auth, finance, dev_tracking
+from app.models import auth, finance, dev_tracking, scm
 
 scheduler = AsyncIOScheduler()
 
@@ -43,16 +43,25 @@ async def generate_summary() -> str:
         Markdown formatted string summary
     """
     # Acquire data from DB
-    async with (SessionLocal() as session):
-        user_data_stmt = select(auth.User)
-        user_data = (await session.execute(user_data_stmt)).scalars().all()
-        finance_data_stmt = select(finance.Finance)
-        finance_data = (await session.execute(finance_data_stmt)).scalars().all()
-        dev_data_stmt = select(dev_tracking.DevProject, dev_tracking.DevInvestment, dev_tracking.ProjectDownload
-                                        ).outerjoin(dev_tracking.DevInvestment, dev_tracking.DevProject.project_id == dev_tracking.DevInvestment.project_id
-                                        ).outerjoin(dev_tracking.ProjectDownload, dev_tracking.DevProject.project_id == dev_tracking.DevInvestment.project_id)
-        dev_data = (await session.execute(dev_data_stmt)).scalars().all()
-        
+    try:
+        async with (SessionLocal() as session):
+            log.info('[SUMMARY] Querying User')
+            user_data_stmt = select(auth.User)
+            user_data = (await session.execute(user_data_stmt)).scalars().all()
+            log.info('[SUMMARY] Querying Finance')
+            finance_data_stmt = select(finance.Finance)
+            finance_data = (await session.execute(finance_data_stmt)).scalars().all()
+            dev_data_stmt = select(dev_tracking.DevProject, dev_tracking.DevInvestment, dev_tracking.ProjectDownload
+                                            ).outerjoin(dev_tracking.DevInvestment, dev_tracking.DevProject.project_id == dev_tracking.DevInvestment.project_id
+                                            ).outerjoin(dev_tracking.ProjectDownload, dev_tracking.DevProject.project_id == dev_tracking.DevInvestment.project_id)
+            dev_data = (await session.execute(dev_data_stmt)).scalars().all()
+            scm_data_stmt = select(scm.Product)
+            scm_data = (await session.execute(scm_data_stmt)).scalars().all()
+
+        # Reformat and send to LLM for summary
+
+    except Exception as e:
+        log.error(f"[SUMMARY] generate_summary failed: {e}")
 
     # Load prompt
     summary_prompt = load_prompt('project_summary.md')
