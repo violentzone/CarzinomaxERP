@@ -32,12 +32,12 @@ async def get_expense_list(current_user: User = Depends(get_current_user), db = 
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all expenses')
+    log.info('[EXPENSE] Query all expenses')
     expenses = (await db.scalars(select(Finance))).all()
     data = []
     for e in expenses:
         data.append(e.to_dict())
-    log.info(f"{str(len(data))} expenses found")
+    log.info(f"[EXPENSE] {str(len(data))} expenses found")
 
     return JSONResponse({
         "status": "success",
@@ -60,15 +60,15 @@ async def get_expense(expense_id: UUID, current_user: User = Depends(get_current
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query expense ID: {expense_id}')
+    log.info(f'[EXPENSE] Query expense ID: {expense_id}')
 
     expense = await db.get(Finance, expense_id)
     if not expense:
-        log.warning(f'Expense ID: {expense_id} not found')
+        log.warning(f'[EXPENSE] Expense ID: {expense_id} not found')
         return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     expense_data = expense.to_dict()
-    log.info(f'Query expense: {expense_data}')
+    log.info(f'[EXPENSE] Query expense: {expense_data}')
 
     return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -98,7 +98,7 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create expense with type: {new_expense.expense_type}')
+    log.info(f'[EXPENSE] Create expense with type: {new_expense.expense_type}')
 
     try:
         expense = Finance(expense_type=new_expense.expense_type, amount=new_expense.amount)
@@ -106,10 +106,10 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
         await db.commit()
         await db.refresh(expense)
         expense_data = expense.to_dict()
-        log.info(f'Expense created: {expense_data}')
+        log.info(f'[EXPENSE] Expense created: {expense_data}')
         return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create expense: {format_exc()}')
+        log.error(f'[EXPENSE] Failed to create expense: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -129,11 +129,11 @@ async def update_expense(expense_id: UUID, new_expense: UpdateExpense, current_u
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update expense ID: {expense_id}')
+    log.info(f'[EXPENSE] Update expense ID: {expense_id}')
 
     old_expense = await db.get(Finance, expense_id)
     if not old_expense:
-        log.warning(f'Expense ID: {expense_id} not found')
+        log.warning(f'[EXPENSE] Expense ID: {expense_id} not found')
         return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -142,10 +142,10 @@ async def update_expense(expense_id: UUID, new_expense: UpdateExpense, current_u
                 setattr(old_expense, field_name, field_value)
         await db.commit()
         await db.refresh(old_expense)
-        log.info(f'Expense updated: {old_expense.to_dict()}')
+        log.info(f'[EXPENSE] Expense updated: {old_expense.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update expense: {format_exc()}')
+        log.error(f'[EXPENSE] Failed to update expense: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -164,18 +164,18 @@ async def delete_expense(expense_id: UUID, current_user: User = Depends(get_curr
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete expense ID: {expense_id}')
+    log.info(f'[EXPENSE] Delete expense ID: {expense_id}')
 
     expense = await db.get(Finance, expense_id)
     if not expense:
-        log.warning(f'Expense ID: {expense_id} not found')
+        log.warning(f'[EXPENSE] Expense ID: {expense_id} not found')
         return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(expense)
         await db.commit()
-        log.info(f'Expense deleted ID: {expense_id}')
+        log.info(f'[EXPENSE] Expense deleted ID: {expense_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete expense: {format_exc()}')
+        log.error(f'[EXPENSE] Failed to delete expense: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')

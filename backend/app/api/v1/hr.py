@@ -34,12 +34,12 @@ async def get_user_list(current_user: User = Depends(get_current_user), db = Dep
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all users')
+    log.info('[USER] Query all users')
     users = (await db.scalars(select(User))).all()
     data = []
     for u in users:
         data.append(u.to_dict())
-    log.info(f"{str(len(data))} users found")
+    log.info(f"[USER] {str(len(data))} users found")
 
     return JSONResponse({
         "status": "success",
@@ -63,15 +63,15 @@ async def get_user(user_id: int, current_user: User = Depends(get_current_user),
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query user ID: {user_id}')
+    log.info(f'[USER] Query user ID: {user_id}')
 
     user = await db.get(User, user_id)
     if not user:
-        log.warning(f'User ID: {user_id} not found')
+        log.warning(f'[USER] User ID: {user_id} not found')
         return JSONResponse({"status": "fail", "error": f"User with id {user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     user_data = user.to_dict()
-    log.info(f'Query user: {user_data}')
+    log.info(f'[USER] Query user: {user_data}')
 
     return JSONResponse({"status": "success", "data": user_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -85,6 +85,7 @@ class CreateUser(BaseModel):
     has_scm_access: bool | None = False
     has_hr_access: bool | None = False
     has_dev_access: bool | None = False
+    send_summary: bool | None = False
     tokens_valid_from: datetime | None = None
 
 
@@ -97,6 +98,7 @@ class UpdateUser(BaseModel):
     has_scm_access: bool | None = None
     has_hr_access: bool | None = None
     has_dev_access: bool | None = None
+    send_summary: bool | None = None
     tokens_valid_from: datetime | None = None
 
 
@@ -115,12 +117,12 @@ async def create_user(new_user: CreateUser, current_user: User = Depends(get_cur
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create user with email: {new_user.email}')
+    log.info(f'[USER] Create user with email: {new_user.email}')
 
     try:
         existing_user = await db.scalar(select(User).where(User.email == new_user.email))
         if existing_user:
-            log.warning(f'User with email {new_user.email} already exists')
+            log.warning(f'[USER] User with email {new_user.email} already exists')
             return JSONResponse({"status": "fail", "error": f"User with email '{new_user.email}' already exists"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
         user = User(
@@ -132,16 +134,17 @@ async def create_user(new_user: CreateUser, current_user: User = Depends(get_cur
             has_scm_access=bool(new_user.has_scm_access),
             has_hr_access=bool(new_user.has_hr_access),
             has_dev_access=bool(new_user.has_dev_access),
+            send_summary=bool(new_user.send_summary),
             tokens_valid_from=new_user.tokens_valid_from,
         )
         db.add(user)
         await db.commit()
         await db.refresh(user)
         user_data = user.to_dict()
-        log.info(f'User created: {user_data}')
+        log.info(f'[USER] User created: {user_data}')
         return JSONResponse({"status": "success", "data": user_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create user: {format_exc()}')
+        log.error(f'[USER] Failed to create user: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -161,11 +164,11 @@ async def update_user(user_id: int, new_user: UpdateUser, current_user: User = D
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update user ID: {user_id}')
+    log.info(f'[USER] Update user ID: {user_id}')
 
     old_user = await db.get(User, user_id)
     if not old_user:
-        log.warning(f'User ID: {user_id} not found')
+        log.warning(f'[USER] User ID: {user_id} not found')
         return JSONResponse({"status": "fail", "error": f"User with id {user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -173,15 +176,15 @@ async def update_user(user_id: int, new_user: UpdateUser, current_user: User = D
             if field_value is not None:
                 if field_name == "password":
                     old_user.hashed_password = get_password_hash(field_value)
-                    log.info(f'Password updated and hashed for user ID: {user_id}')
+                    log.info(f'[USER] Password updated and hashed for user ID: {user_id}')
                 else:
                     setattr(old_user, field_name, field_value)
         await db.commit()
         await db.refresh(old_user)
-        log.info(f'User updated: {old_user.to_dict()}')
+        log.info(f'[USER] User updated: {old_user.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update user: {format_exc()}')
+        log.error(f'[USER] Failed to update user: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -200,20 +203,20 @@ async def delete_user(user_id: int, current_user: User = Depends(get_current_use
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete user ID: {user_id}')
+    log.info(f'[USER] Delete user ID: {user_id}')
 
     user = await db.get(User, user_id)
     if not user:
-        log.warning(f'User ID: {user_id} not found')
+        log.warning(f'[USER] User ID: {user_id} not found')
         return JSONResponse({"status": "fail", "error": f"User with id {user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(user)
         await db.commit()
-        log.info(f'User deleted ID: {user_id}')
+        log.info(f'[USER] User deleted ID: {user_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete user: {format_exc()}')
+        log.error(f'[USER] Failed to delete user: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -235,12 +238,12 @@ async def get_department_list(current_user: User = Depends(get_current_user), db
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all departments')
+    log.info('[DEPARTMENT] Query all departments')
     departments = (await db.scalars(select(Department))).all()
     data = []
     for d in departments:
         data.append(d.to_dict())
-    log.info(f"{str(len(data))} departments found")
+    log.info(f"[DEPARTMENT] {str(len(data))} departments found")
 
     return JSONResponse({
         "status": "success",
@@ -263,15 +266,15 @@ async def get_department(department_id: int, current_user: User = Depends(get_cu
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query department ID: {department_id}')
+    log.info(f'[DEPARTMENT] Query department ID: {department_id}')
 
     department = await db.get(Department, department_id)
     if not department:
-        log.warning(f'Department ID: {department_id} not found')
+        log.warning(f'[DEPARTMENT] Department ID: {department_id} not found')
         return JSONResponse({"status": "fail", "error": f"Department with id {department_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     department_data = department.to_dict()
-    log.info(f'Query department: {department_data}')
+    log.info(f'[DEPARTMENT] Query department: {department_data}')
 
     return JSONResponse({"status": "success", "data": department_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -303,12 +306,12 @@ async def create_department(new_department: CreateDepartment, current_user: User
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create department with code: {new_department.code}')
+    log.info(f'[DEPARTMENT] Create department with code: {new_department.code}')
 
     try:
         existing_department = await db.scalar(select(Department).where(Department.code == new_department.code))
         if existing_department:
-            log.warning(f'Department with code {new_department.code} already exists')
+            log.warning(f'[DEPARTMENT] Department with code {new_department.code} already exists')
             return JSONResponse({"status": "fail", "error": f"Department with code '{new_department.code}' already exists"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
         department = Department(
@@ -320,10 +323,10 @@ async def create_department(new_department: CreateDepartment, current_user: User
         await db.commit()
         await db.refresh(department)
         department_data = department.to_dict()
-        log.info(f'Department created: {department_data}')
+        log.info(f'[DEPARTMENT] Department created: {department_data}')
         return JSONResponse({"status": "success", "data": department_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create department: {format_exc()}')
+        log.error(f'[DEPARTMENT] Failed to create department: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -343,11 +346,11 @@ async def update_department(department_id: int, new_department: UpdateDepartment
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update department ID: {department_id}')
+    log.info(f'[DEPARTMENT] Update department ID: {department_id}')
 
     old_department = await db.get(Department, department_id)
     if not old_department:
-        log.warning(f'Department ID: {department_id} not found')
+        log.warning(f'[DEPARTMENT] Department ID: {department_id} not found')
         return JSONResponse({"status": "fail", "error": f"Department with id {department_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -356,10 +359,10 @@ async def update_department(department_id: int, new_department: UpdateDepartment
                 setattr(old_department, field_name, field_value)
         await db.commit()
         await db.refresh(old_department)
-        log.info(f'Department updated: {old_department.to_dict()}')
+        log.info(f'[DEPARTMENT] Department updated: {old_department.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update department: {format_exc()}')
+        log.error(f'[DEPARTMENT] Failed to update department: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -378,20 +381,20 @@ async def delete_department(department_id: int, current_user: User = Depends(get
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete department ID: {department_id}')
+    log.info(f'[DEPARTMENT] Delete department ID: {department_id}')
 
     department = await db.get(Department, department_id)
     if not department:
-        log.warning(f'Department ID: {department_id} not found')
+        log.warning(f'[DEPARTMENT] Department ID: {department_id} not found')
         return JSONResponse({"status": "fail", "error": f"Department with id {department_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(department)
         await db.commit()
-        log.info(f'Department deleted ID: {department_id}')
+        log.info(f'[DEPARTMENT] Department deleted ID: {department_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete department: {format_exc()}')
+        log.error(f'[DEPARTMENT] Failed to delete department: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -413,12 +416,12 @@ async def get_attendance_list(current_user: User = Depends(get_current_user), db
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all attendance logs')
+    log.info('[ATTENDANCE] Query all attendance logs')
     attendance_logs = (await db.scalars(select(AttendanceLog))).all()
     data = []
     for a in attendance_logs:
         data.append(a.to_dict())
-    log.info(f"{str(len(data))} attendance logs found")
+    log.info(f"[ATTENDANCE] {str(len(data))} attendance logs found")
 
     return JSONResponse({
         "status": "success",
@@ -441,15 +444,15 @@ async def get_attendance(attendance_id: int, current_user: User = Depends(get_cu
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query attendance log ID: {attendance_id}')
+    log.info(f'[ATTENDANCE] Query attendance log ID: {attendance_id}')
 
     attendance = await db.get(AttendanceLog, attendance_id)
     if not attendance:
-        log.warning(f'Attendance log ID: {attendance_id} not found')
+        log.warning(f'[ATTENDANCE] Attendance log ID: {attendance_id} not found')
         return JSONResponse({"status": "fail", "error": f"Attendance log with id {attendance_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     attendance_data = attendance.to_dict()
-    log.info(f'Query attendance log: {attendance_data}')
+    log.info(f'[ATTENDANCE] Query attendance log: {attendance_data}')
 
     return JSONResponse({"status": "success", "data": attendance_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -485,12 +488,12 @@ async def create_attendance(new_attendance: CreateAttendance, current_user: User
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create attendance log for user ID: {new_attendance.user_id} on {new_attendance.date}')
+    log.info(f'[ATTENDANCE] Create attendance log for user ID: {new_attendance.user_id} on {new_attendance.date}')
 
     try:
         user = await db.get(User, new_attendance.user_id)
         if not user:
-            log.warning(f'User ID: {new_attendance.user_id} not found')
+            log.warning(f'[ATTENDANCE] User ID: {new_attendance.user_id} not found')
             return JSONResponse({"status": "fail", "error": f"User with id {new_attendance.user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         attendance = AttendanceLog(
@@ -504,10 +507,10 @@ async def create_attendance(new_attendance: CreateAttendance, current_user: User
         await db.commit()
         await db.refresh(attendance)
         attendance_data = attendance.to_dict()
-        log.info(f'Attendance log created: {attendance_data}')
+        log.info(f'[ATTENDANCE] Attendance log created: {attendance_data}')
         return JSONResponse({"status": "success", "data": attendance_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create attendance log: {format_exc()}')
+        log.error(f'[ATTENDANCE] Failed to create attendance log: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -527,11 +530,11 @@ async def update_attendance(attendance_id: int, new_attendance: UpdateAttendance
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update attendance log ID: {attendance_id}')
+    log.info(f'[ATTENDANCE] Update attendance log ID: {attendance_id}')
 
     old_attendance = await db.get(AttendanceLog, attendance_id)
     if not old_attendance:
-        log.warning(f'Attendance log ID: {attendance_id} not found')
+        log.warning(f'[ATTENDANCE] Attendance log ID: {attendance_id} not found')
         return JSONResponse({"status": "fail", "error": f"Attendance log with id {attendance_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -540,10 +543,10 @@ async def update_attendance(attendance_id: int, new_attendance: UpdateAttendance
                 setattr(old_attendance, field_name, field_value)
         await db.commit()
         await db.refresh(old_attendance)
-        log.info(f'Attendance log updated: {old_attendance.to_dict()}')
+        log.info(f'[ATTENDANCE] Attendance log updated: {old_attendance.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update attendance log: {format_exc()}')
+        log.error(f'[ATTENDANCE] Failed to update attendance log: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -562,20 +565,20 @@ async def delete_attendance(attendance_id: int, current_user: User = Depends(get
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete attendance log ID: {attendance_id}')
+    log.info(f'[ATTENDANCE] Delete attendance log ID: {attendance_id}')
 
     attendance = await db.get(AttendanceLog, attendance_id)
     if not attendance:
-        log.warning(f'Attendance log ID: {attendance_id} not found')
+        log.warning(f'[ATTENDANCE] Attendance log ID: {attendance_id} not found')
         return JSONResponse({"status": "fail", "error": f"Attendance log with id {attendance_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(attendance)
         await db.commit()
-        log.info(f'Attendance log deleted ID: {attendance_id}')
+        log.info(f'[ATTENDANCE] Attendance log deleted ID: {attendance_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete attendance log: {format_exc()}')
+        log.error(f'[ATTENDANCE] Failed to delete attendance log: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -597,12 +600,12 @@ async def get_leave_request_list(current_user: User = Depends(get_current_user),
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all leave requests')
+    log.info('[LEAVE_REQUEST] Query all leave requests')
     leave_requests = (await db.scalars(select(LeaveRequest))).all()
     data = []
     for lr in leave_requests:
         data.append(lr.to_dict())
-    log.info(f"{str(len(data))} leave requests found")
+    log.info(f"[LEAVE_REQUEST] {str(len(data))} leave requests found")
 
     return JSONResponse({
         "status": "success",
@@ -625,15 +628,15 @@ async def get_leave_request(leave_request_id: int, current_user: User = Depends(
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query leave request ID: {leave_request_id}')
+    log.info(f'[LEAVE_REQUEST] Query leave request ID: {leave_request_id}')
 
     leave_request = await db.get(LeaveRequest, leave_request_id)
     if not leave_request:
-        log.warning(f'Leave request ID: {leave_request_id} not found')
+        log.warning(f'[LEAVE_REQUEST] Leave request ID: {leave_request_id} not found')
         return JSONResponse({"status": "fail", "error": f"Leave request with id {leave_request_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     leave_request_data = leave_request.to_dict()
-    log.info(f'Query leave request: {leave_request_data}')
+    log.info(f'[LEAVE_REQUEST] Query leave request: {leave_request_data}')
 
     return JSONResponse({"status": "success", "data": leave_request_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -673,16 +676,16 @@ async def create_leave_request(new_leave_request: CreateLeaveRequest, current_us
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create leave request for user ID: {new_leave_request.user_id} ({new_leave_request.leave_type})')
+    log.info(f'[LEAVE_REQUEST] Create leave request for user ID: {new_leave_request.user_id} ({new_leave_request.leave_type})')
 
     try:
         user = await db.get(User, new_leave_request.user_id)
         if not user:
-            log.warning(f'User ID: {new_leave_request.user_id} not found')
+            log.warning(f'[LEAVE_REQUEST] User ID: {new_leave_request.user_id} not found')
             return JSONResponse({"status": "fail", "error": f"User with id {new_leave_request.user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         if new_leave_request.end_date < new_leave_request.start_date:
-            log.warning(f'Leave request end date {new_leave_request.end_date} is before start date {new_leave_request.start_date}')
+            log.warning(f'[LEAVE_REQUEST] Leave request end date {new_leave_request.end_date} is before start date {new_leave_request.start_date}')
             return JSONResponse({"status": "fail", "error": "end_date must not be before start_date"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
         leave_request = LeaveRequest(
@@ -698,10 +701,10 @@ async def create_leave_request(new_leave_request: CreateLeaveRequest, current_us
         await db.commit()
         await db.refresh(leave_request)
         leave_request_data = leave_request.to_dict()
-        log.info(f'Leave request created: {leave_request_data}')
+        log.info(f'[LEAVE_REQUEST] Leave request created: {leave_request_data}')
         return JSONResponse({"status": "success", "data": leave_request_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create leave request: {format_exc()}')
+        log.error(f'[LEAVE_REQUEST] Failed to create leave request: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -721,11 +724,11 @@ async def update_leave_request(leave_request_id: int, new_leave_request: UpdateL
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update leave request ID: {leave_request_id}')
+    log.info(f'[LEAVE_REQUEST] Update leave request ID: {leave_request_id}')
 
     old_leave_request = await db.get(LeaveRequest, leave_request_id)
     if not old_leave_request:
-        log.warning(f'Leave request ID: {leave_request_id} not found')
+        log.warning(f'[LEAVE_REQUEST] Leave request ID: {leave_request_id} not found')
         return JSONResponse({"status": "fail", "error": f"Leave request with id {leave_request_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -733,15 +736,15 @@ async def update_leave_request(leave_request_id: int, new_leave_request: UpdateL
             if field_value is not None:
                 setattr(old_leave_request, field_name, field_value)
         if old_leave_request.end_date < old_leave_request.start_date:
-            log.warning(f'Leave request end date {old_leave_request.end_date} is before start date {old_leave_request.start_date}')
+            log.warning(f'[LEAVE_REQUEST] Leave request end date {old_leave_request.end_date} is before start date {old_leave_request.start_date}')
             await db.rollback()
             return JSONResponse({"status": "fail", "error": "end_date must not be before start_date"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         await db.commit()
         await db.refresh(old_leave_request)
-        log.info(f'Leave request updated: {old_leave_request.to_dict()}')
+        log.info(f'[LEAVE_REQUEST] Leave request updated: {old_leave_request.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update leave request: {format_exc()}')
+        log.error(f'[LEAVE_REQUEST] Failed to update leave request: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -760,20 +763,20 @@ async def delete_leave_request(leave_request_id: int, current_user: User = Depen
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete leave request ID: {leave_request_id}')
+    log.info(f'[LEAVE_REQUEST] Delete leave request ID: {leave_request_id}')
 
     leave_request = await db.get(LeaveRequest, leave_request_id)
     if not leave_request:
-        log.warning(f'Leave request ID: {leave_request_id} not found')
+        log.warning(f'[LEAVE_REQUEST] Leave request ID: {leave_request_id} not found')
         return JSONResponse({"status": "fail", "error": f"Leave request with id {leave_request_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(leave_request)
         await db.commit()
-        log.info(f'Leave request deleted ID: {leave_request_id}')
+        log.info(f'[LEAVE_REQUEST] Leave request deleted ID: {leave_request_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete leave request: {format_exc()}')
+        log.error(f'[LEAVE_REQUEST] Failed to delete leave request: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -795,12 +798,12 @@ async def get_paycheck_list(current_user: User = Depends(get_current_user), db =
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all paychecks')
+    log.info('[PAYCHECK] Query all paychecks')
     paychecks = (await db.scalars(select(Paycheck))).all()
     data = []
     for p in paychecks:
         data.append(p.to_dict())
-    log.info(f"{str(len(data))} paychecks found")
+    log.info(f"[PAYCHECK] {str(len(data))} paychecks found")
 
     return JSONResponse({
         "status": "success",
@@ -823,15 +826,15 @@ async def get_paycheck(paycheck_id: int, current_user: User = Depends(get_curren
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query paycheck ID: {paycheck_id}')
+    log.info(f'[PAYCHECK] Query paycheck ID: {paycheck_id}')
 
     paycheck = await db.get(Paycheck, paycheck_id)
     if not paycheck:
-        log.warning(f'Paycheck ID: {paycheck_id} not found')
+        log.warning(f'[PAYCHECK] Paycheck ID: {paycheck_id} not found')
         return JSONResponse({"status": "fail", "error": f"Paycheck with id {paycheck_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     paycheck_data = paycheck.to_dict()
-    log.info(f'Query paycheck: {paycheck_data}')
+    log.info(f'[PAYCHECK] Query paycheck: {paycheck_data}')
 
     return JSONResponse({"status": "success", "data": paycheck_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -839,7 +842,7 @@ async def get_paycheck(paycheck_id: int, current_user: User = Depends(get_curren
 class CreatePaycheck(BaseModel):
     user_id: int
     pay_period_start: date_type
-    pay_period_end: date_type
+    pay_period_end: date_type | None = None  # None = open-ended, the member is still working
     base_salary: float
     allowances: float | None = 0.0
     deductions: float | None = 0.0
@@ -875,16 +878,16 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create paycheck for user ID: {new_paycheck.user_id} ({new_paycheck.pay_period_start} - {new_paycheck.pay_period_end})')
+    log.info(f'[PAYCHECK] Create paycheck for user ID: {new_paycheck.user_id} ({new_paycheck.pay_period_start} - {new_paycheck.pay_period_end})')
 
     try:
         user = await db.get(User, new_paycheck.user_id)
         if not user:
-            log.warning(f'User ID: {new_paycheck.user_id} not found')
+            log.warning(f'[PAYCHECK] User ID: {new_paycheck.user_id} not found')
             return JSONResponse({"status": "fail", "error": f"User with id {new_paycheck.user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-        if new_paycheck.pay_period_end < new_paycheck.pay_period_start:
-            log.warning(f'Paycheck period end {new_paycheck.pay_period_end} is before period start {new_paycheck.pay_period_start}')
+        if new_paycheck.pay_period_end is not None and new_paycheck.pay_period_end < new_paycheck.pay_period_start:
+            log.warning(f'[PAYCHECK] Paycheck period end {new_paycheck.pay_period_end} is before period start {new_paycheck.pay_period_start}')
             return JSONResponse({"status": "fail", "error": "pay_period_end must not be before pay_period_start"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
         allowances = new_paycheck.allowances if new_paycheck.allowances is not None else 0.0
@@ -906,10 +909,10 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
         await db.commit()
         await db.refresh(paycheck)
         paycheck_data = paycheck.to_dict()
-        log.info(f'Paycheck created: {paycheck_data}')
+        log.info(f'[PAYCHECK] Paycheck created: {paycheck_data}')
         return JSONResponse({"status": "success", "data": paycheck_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create paycheck: {format_exc()}')
+        log.error(f'[PAYCHECK] Failed to create paycheck: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -929,27 +932,27 @@ async def update_paycheck(paycheck_id: int, new_paycheck: UpdatePaycheck, curren
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update paycheck ID: {paycheck_id}')
+    log.info(f'[PAYCHECK] Update paycheck ID: {paycheck_id}')
 
     old_paycheck = await db.get(Paycheck, paycheck_id)
     if not old_paycheck:
-        log.warning(f'Paycheck ID: {paycheck_id} not found')
+        log.warning(f'[PAYCHECK] Paycheck ID: {paycheck_id} not found')
         return JSONResponse({"status": "fail", "error": f"Paycheck with id {paycheck_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         for field_name, field_value in new_paycheck:
             if field_value is not None:
                 setattr(old_paycheck, field_name, field_value)
-        if old_paycheck.pay_period_end < old_paycheck.pay_period_start:
-            log.warning(f'Paycheck period end {old_paycheck.pay_period_end} is before period start {old_paycheck.pay_period_start}')
+        if old_paycheck.pay_period_end is not None and old_paycheck.pay_period_end < old_paycheck.pay_period_start:
+            log.warning(f'[PAYCHECK] Paycheck period end {old_paycheck.pay_period_end} is before period start {old_paycheck.pay_period_start}')
             await db.rollback()
             return JSONResponse({"status": "fail", "error": "pay_period_end must not be before pay_period_start"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         await db.commit()
         await db.refresh(old_paycheck)
-        log.info(f'Paycheck updated: {old_paycheck.to_dict()}')
+        log.info(f'[PAYCHECK] Paycheck updated: {old_paycheck.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update paycheck: {format_exc()}')
+        log.error(f'[PAYCHECK] Failed to update paycheck: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -968,18 +971,18 @@ async def delete_paycheck(paycheck_id: int, current_user: User = Depends(get_cur
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete paycheck ID: {paycheck_id}')
+    log.info(f'[PAYCHECK] Delete paycheck ID: {paycheck_id}')
 
     paycheck = await db.get(Paycheck, paycheck_id)
     if not paycheck:
-        log.warning(f'Paycheck ID: {paycheck_id} not found')
+        log.warning(f'[PAYCHECK] Paycheck ID: {paycheck_id} not found')
         return JSONResponse({"status": "fail", "error": f"Paycheck with id {paycheck_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(paycheck)
         await db.commit()
-        log.info(f'Paycheck deleted ID: {paycheck_id}')
+        log.info(f'[PAYCHECK] Paycheck deleted ID: {paycheck_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete paycheck: {format_exc()}')
+        log.error(f'[PAYCHECK] Failed to delete paycheck: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')

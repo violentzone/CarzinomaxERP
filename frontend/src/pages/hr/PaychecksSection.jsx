@@ -34,7 +34,7 @@ export default function PaychecksSection() {
       placeholder: userOptions.length ? 'Select a member…' : 'No users — create one first',
     },
     { key: 'pay_period_start', label: 'Period start', type: 'date', required: true, default: monthBounds().start },
-    { key: 'pay_period_end', label: 'Period end', type: 'date', required: true, default: monthBounds().end },
+    { key: 'pay_period_end', label: 'Period end', type: 'date', hint: 'Leave blank while the member is still working (open-ended).' },
     { key: 'base_salary', label: 'Base salary', type: 'number', step: '0.01', min: 0, required: true },
     { key: 'allowances', label: 'Allowances', type: 'number', step: '0.01', min: 0, default: 0 },
     { key: 'deductions', label: 'Deductions', type: 'number', step: '0.01', min: 0, default: 0 },
@@ -160,7 +160,7 @@ export default function PaychecksSection() {
           header: 'Pay period',
           render: (r) => (
             <span className="muted" style={{ whiteSpace: 'nowrap' }}>
-              {fmtDate(r.pay_period_start)} – {fmtDate(r.pay_period_end)}
+              {fmtDate(r.pay_period_start)} – {r.pay_period_end ? fmtDate(r.pay_period_end) : 'ongoing'}
             </span>
           ),
         },

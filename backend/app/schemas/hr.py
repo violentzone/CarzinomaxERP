@@ -70,7 +70,7 @@ class LeaveRequestResponse(LeaveRequestBase):
 class PaycheckBase(BaseModel):
     employee_id: int
     pay_period_start: date
-    pay_period_end: date
+    pay_period_end: Optional[date] = None
     base_salary: Decimal
     allowances: Decimal = Field(default=Decimal("0.0"))
     deductions: Decimal = Field(default=Decimal("0.0"))

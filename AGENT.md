@@ -15,13 +15,14 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 ## 🛠️ Main Features (current state)
 
 ### 1. Auth & access control ([api/v1/auth.py](backend/app/api/v1/auth.py), [api/common/general.py](backend/app/api/common/general.py))
-* Default admin seeded on startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`, with all four module flags.
+* Default admin seeded on startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`, with all four module flags and `send_summary` on.
 * `POST /auth/login?user_email=…&password=…` returns a bare JWT string (7-day expiry). `GET /auth/me` returns the current user. `POST /auth/logout` sets `tokens_valid_from` on the user so every token issued before now is rejected.
 * **There are no roles.** `User` carries four booleans: `has_finance_access`, `has_scm_access`, `has_hr_access`, `has_dev_access`. Each router calls `permission_check('<finance|scm|hr|dev>', current_user.id, db)` at the top of every endpoint and returns a 403 envelope on failure.
+* `User` also carries `send_summary` (bool, default false): opt-in to the scheduled project summary mail (`summary_mail` job). It is **not** an access flag; it is settable through `POST`/`PUT /hr/user`, the `create_user` / `update_user` chat tools (and a `get_user_info` filter), and the "Receive project summary email" toggle in Users & Access.
 
 ### 2. People & Payroll / HR ([models/hr.py](backend/app/models/hr.py), [api/v1/hr.py](backend/app/api/v1/hr.py))
 * Every `User` is an employee; the HR router owns user CRUD (`/hr/user…`; `/hr/employee_list` and `/hr/employee/{id}` are read-only aliases).
-* `Department` (code, name, manager_id), `AttendanceLog` (clock in/out, `total_hours`), `LeaveRequest` (type, dates, pending/approved/rejected, `approved_by_id`), `Paycheck` (period, base, allowances, deductions, `net_pay`, draft/paid).
+* `Department` (code, name, manager_id), `AttendanceLog` (clock in/out, `total_hours`), `LeaveRequest` (type, dates, pending/approved/rejected, `approved_by_id`), `Paycheck` (period, base, allowances, deductions, `net_pay`, draft/paid). `pay_period_end` is nullable: NULL means open-ended, the member is still working; period filters treat it as ongoing.
 * Paycheck creation computes `net_pay = base + allowances − deductions` unless the client sends one.
 
 ### 3. Dev Tracking ([models/dev_tracking.py](backend/app/models/dev_tracking.py), [api/v1/dev_tracking.py](backend/app/api/v1/dev_tracking.py))
@@ -35,10 +36,10 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 ### 5. Purchases / SCM ([models/scm.py](backend/app/models/scm.py), [api/v1/scm.py](backend/app/api/v1/scm.py))
 * Minimal. `Product` (sku, name, description, unit_price, cost). No vendors, warehouses or purchase orders.
 
-### 6. LLM model ([ai_service/agents.py](backend/app/ai_service/agents.py), [ai_service/llm_router.py](backend/app/ai_service/llm_router.py))
+### 6. LLM model ([ai_service/agents.py](backend/app/ai_service/agents.py))
 * The live model object is `llm`, a module-level `ChatLiteLLM` in `agents.py` (re-exported from `app.ai_service`). It is built from `LLM_MODEL` / `LLM_API_KEY`, and `LLM_API_BASE` only when `LLM_TYPE == 'local'`.
 * Startup runs `llm.invoke('ping', max_tokens=1)` once; failure is logged and does not block startup. `POST /chatbot/` repeats the same ping on demand (no auth, takes `user_id` as a query param).
-* `LlmRouter` in `llm_router.py` (litellm wrapper with `chat()`, `stream_chat()`, `parsed_chat(response_format=…)`, `model_check()`) is **not referenced anywhere**. Treat it as legacy; new AI code goes through `llm` or the orchestrator.
+* `llm` is the only model client. New AI code goes through it or the orchestrator; never import litellm directly or build a second client.
 * Config: `LLM_TYPE` (`remote` | `local`), `LLM_MODEL` (litellm `<provider>/<model>` naming), `LLM_API_KEY`, `LLM_API_BASE`. The model must accept image input: chat attachments are sent as image blocks with no text-only fallback (README, "Pick an LLM").
 
 ### 6b. Chat control ([ai_service/agents.py](backend/app/ai_service/agents.py), [ai_service/tool_store.py](backend/app/ai_service/tool_store.py), [api/v1/chatbot.py](backend/app/api/v1/chatbot.py))
@@ -53,8 +54,10 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * `agents.py` has a `__main__` CLI loop for manual testing: `uv run python -m app.ai_service.agents` from `backend/` (uses user id 1).
 
 ### 7. Scheduler ([core/scheduler.py](backend/app/core/scheduler.py))
-* An `AsyncIOScheduler` starts and stops with the app. One job is registered: `github_sync` (`CronTrigger.from_crontab(GITHUB_SYNC_CRON)`, default `0 */6 * * *`, `misfire_grace_time=3600`) opens its own `SessionLocal` session and calls `sync_github_repos`. Jobs catch every exception and log through `system_log()` with a `Scheduler:` prefix, because APScheduler reports job errors via std `logging`, which is not forwarded to loguru. An invalid cron string is logged at startup and the job is skipped. There is one scheduler per process, so run the backend single-worker.
+* An `AsyncIOScheduler` starts and stops with the app. Two jobs are registered: `summary_mail` (below) and `github_sync` (`CronTrigger.from_crontab(GITHUB_SYNC_CRON)`, default `0 */6 * * *`, `misfire_grace_time=3600`) opens its own `SessionLocal` session and calls `sync_github_repos`. Jobs catch every exception and log through `system_log()` with a `Scheduler:` prefix, because APScheduler reports job errors via std `logging`, which is not forwarded to loguru. An invalid cron string is logged at startup and the job is skipped. There is one scheduler per process, so run the backend single-worker.
 * `PAYCHECK_CALCULATE_TIMESPOT` (cron string, default `0 0 1 * *`) is still read into settings but unused; the monthly payroll job is planned, not implemented.
+* `send_email(send_to, subject, body) -> list[str]` (sync, stdlib `smtplib`, 30 s timeout) sends plain-text mail through `SMTP_HOSTNAME` / `SMTP_PORT` (465 = implicit SSL, anything else STARTTLS) / `SMTP_USER` / `SMTP_PASSWORD` / `MAIL_FROM`, all required from `.env`; it returns the accepted addresses, logs `[EMAIL]`, and raises on connection failure. Call it from async code via `asyncio.to_thread`.
+* `generate_summary()` asks the shared `llm` (`ChatLiteLLM`, via `ainvoke` with a system + human message) for a Markdown status summary of every table. User, Finance and SCM go in as raw `to_dict()` rows; Dev Tracking goes in pre-aggregated in SQL as a plain dict (`query_dev_tracking_summary(session)`: project count and projects without a repo via a left join on `GithubRepo`, investment totals overall / this month / per category, repo count with stars, downloads, last sync and error count, snapshot count and newest date) so the payload stays small as snapshots accumulate. `send_summary()` selects the emails of users with `send_summary`, returns early with no LLM call and no mail when nobody opted in (an empty To header is refused by SMTP), otherwise calls `generate_summary()` and `send_email` via `asyncio.to_thread` with the subject `Carzinomax Dev summary`, and returns the accepted addresses. `summary_mail_job` wraps it (never raises, logs `[SUMMARY_MAIL]`) and is registered in `start_scheduler()` as job id `summary_mail` with `misfire_grace_time=3600` on a `CronTrigger` built from the settings, which `config.py` validates at startup — `SUMMARY_SEND_TIME` (hour 0-23, server local, minute 0), `SUMMARY_SEND_FREQ` (`day` | `week` | `month`), `SUMMARY_SEND_WEEKDAY` (0-6, Monday = 0, required when `week`), `SUMMARY_SEND_MONTHDAY` (1-31, required when `month`). The filter is `send_summary` only; `is_active` is not checked.
 
 ### 8. Frontend ([frontend/](frontend/))
 * React 19 + Vite SPA, complete for every backend module: Dashboard, People & Payroll, Finance, Purchases, Dev Tracking, Users & Access. Framer Motion, Recharts, lucide-react, react-router. Native `fetch` wrapper in `src/lib/api.js` (no axios).
@@ -65,7 +68,6 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 
 ### ⚠️ Known gaps (do not build on these)
 * `app/schemas/finance.py`, `scm.py`, `hr.py`, `dev_tracking.py` describe tables from the old version (GL accounts, journal entries, invoices, fixed assets, payments, product categories, dev worker paychecks). They are re-exported by `schemas/__init__.py` but **used by nothing**. Routers define their own request models inline.
-* `LlmRouter` (`ai_service/llm_router.py`) has no callers.
 * `app/middleware/` is an empty package; `langgraph-supervisor` is in `pyproject.toml` but never imported.
 * `POST /chatbot/` is unauthenticated.
 * `backend/README.md` is empty.
@@ -98,7 +100,6 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │       │   ├── __init__.py              # exports `llm`, `init_orchestrator`
 │       │   ├── agents.py                # ChatLiteLLM `llm`, sub-agents, orchestrator factory, HITL delete tools
 │       │   ├── tool_store.py            # 40 @tool CRUD tools (sync sessions)
-│       │   ├── llm_router.py            # LlmRouter (litellm) — legacy, unreferenced
 │       │   └── prompts/                 # orchestrator_prompt.md + hr/expanse/scm/dev_helper_prompt.md
 │       ├── api/
 │       │   ├── common/general.py        # get_current_user (JWT bearer), permission_check
@@ -155,7 +156,7 @@ Requires Python 3.14+, PostgreSQL, and [uv](https://github.com/astral-sh/uv). Ru
 
 ```bash
 cd backend
-cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*; optional GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
+cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*, SMTP_* / MAIL_FROM, SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ (+ WEEKDAY or MONTHDAY); optional GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
 uv sync
 uv run alembic upgrade head # tables are created ONLY by Alembic; startup does not create_all
 uv run uvicorn app.main:app --reload
@@ -189,7 +190,7 @@ There is no test suite (`backend/.pytest_cache` exists but holds nothing). If yo
 * **Endpoint shape.** Lists are `GET /<module>/<thing>_list`; single records are `/<module>/<thing>/{id}` with `POST` (create), `PUT` (partial update, all fields optional) and `DELETE`. Follow the existing pattern in `hr.py` when adding a resource.
 * **Permission check first.** Every endpoint takes `current_user: User = Depends(get_current_user)` and begins with `if not await permission_check('<module>', current_user.id, db): return 403 envelope`. Do not add role checkers or new access flags without discussion.
 * **Request models.** Routers define their request models inline as Pydantic v2 `BaseModel` subclasses next to the endpoints (e.g. `CreateExpense`, `CreatePaycheck`). The only shared schemas in use are `app/schemas/auth.py` and `app/schemas/chatbot.py`. Do not import the legacy finance/scm/hr/dev_tracking schemas. Responses are built from `model.to_dict()`, not from response schemas.
-* **Logging.** One logger per file, never passed as an argument: `app/core/` modules bind `system_log = system_log()` right after the imports; endpoints start with `log = user_log(current_user.id)`. `system_log` is for startup/shutdown/auth attempts and background work, `user_log` for what a user triggered. Never `print` (the `__main__` block in `agents.py` is the one exception). Log `format_exc()` on caught exceptions. Chat tools do not log.
+* **Logging.** One logger per file, never passed as an argument: `app/core/` modules bind `system_log = system_log()` right after the imports; endpoints start with `log = user_log(current_user.id)`. `system_log` is for startup/shutdown/auth attempts and background work, `user_log` for what a user triggered. Never `print` (the `__main__` block in `agents.py` is the one exception). Log `format_exc()` on caught exceptions. Chat tools do not log. Every message starts with an upper-snake-case tag in brackets naming the resource or job, e.g. `[USER]`, `[PAYCHECK]`, `[GITHUB_SYNC]`, `[SUMMARY_MAIL]`: CRUD routers tag per resource, jobs and infrastructure per file or job.
 * **Config.** All settings come from `app.core.config.settings` (pydantic-settings, `.env`). Add new variables there and to `.env.example`. Never commit `.env`.
 * **LLM calls.** Use the shared `llm` (`ChatLiteLLM`) from `app.ai_service` or go through the orchestrator; never import litellm or build a second model client in a router. For anything the code will act on, use structured output (a Pydantic model via `with_structured_output` or a tool) rather than parsing free text.
 * **Chat tools.** One `@tool` per operation in `tool_store.py`; keep the `XxxDetail` / `GetXxxOutput` / `DeleteOutput` return models, filter only on non-`None` args, raise `ValueError` for bad input, no `user_id` argument. Register the tool in `agents.py` and document it in the matching prompt file; deletes go on the orchestrator and into the module's `*_DELETE_TOOLS`.

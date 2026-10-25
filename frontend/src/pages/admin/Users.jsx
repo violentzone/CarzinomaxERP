@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShieldCheck, UserPlus, Wallet, Boxes, Users as UsersIcon, LineChart, Pencil, Trash2, X } from 'lucide-react'
+import { ShieldCheck, UserPlus, Wallet, Boxes, Users as UsersIcon, LineChart, Mail, Pencil, Trash2, X } from 'lucide-react'
 import { hrApi } from '../../api/hr'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -31,6 +31,7 @@ const EMPTY = {
   has_scm_access: false,
   has_hr_access: false,
   has_dev_access: false,
+  send_summary: false,
 }
 
 /**
@@ -65,6 +66,7 @@ export default function UsersPage() {
       has_scm_access: !!u.has_scm_access,
       has_hr_access: !!u.has_hr_access,
       has_dev_access: !!u.has_dev_access,
+      send_summary: !!u.send_summary,
     })
   }
 
@@ -87,6 +89,7 @@ export default function UsersPage() {
           email: values.email.trim(),
           full_name: values.full_name.trim() || undefined,
           is_active: values.is_active,
+          send_summary: !!values.send_summary,
           ...flags,
           password: values.password || undefined,
         })
@@ -105,6 +108,7 @@ export default function UsersPage() {
           password: values.password,
           full_name: values.full_name.trim() || undefined,
           is_active: values.is_active,
+          send_summary: !!values.send_summary,
           ...flags,
         })
         toast.success(`${values.full_name || values.email} created`)
@@ -186,6 +190,12 @@ export default function UsersPage() {
       header: 'Status',
       width: 90,
       render: (r) => <Badge tone={r.is_active ? 'success' : 'danger'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>,
+    },
+    {
+      key: 'send_summary',
+      header: 'Summary',
+      width: 90,
+      render: (r) => (r.send_summary ? <Badge tone="info">Email</Badge> : <span className="muted">—</span>),
     },
     {
       key: 'actions',
@@ -328,6 +338,25 @@ export default function UsersPage() {
                 <span className="field-hint muted">
                   All four together make an administrator. User management needs People &amp; Payroll.
                 </span>
+              </div>
+
+              <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
+                <span className="field-label">Notifications</span>
+                <label className="check-field">
+                  <input
+                    type="checkbox"
+                    checked={!!values.send_summary}
+                    onChange={(e) => setField('send_summary', e.target.checked)}
+                  />
+                  <span>
+                    <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
+                      <Mail size={14} className="muted" /> Receive project summary email
+                    </span>
+                    <span className="field-hint muted">
+                      AI-written status summary of every module, sent on the schedule set in the server config. Inactive accounts are skipped.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div className="row gap-2" style={{ justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>

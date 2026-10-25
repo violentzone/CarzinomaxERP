@@ -26,16 +26,16 @@ MAX_ATTACHMENTS = 5  # files per chat turn, the frontend enforces the same numbe
 async def health_check(user_id: int):
     log = user_log(user_id)
     start_time = datetime.now()
-    log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} checks chatbot health')
+    log.info(f'[CHATBOT] {start_time.strftime('%Y-%m-%d %H:%M:%S')} checks chatbot health')
     try:
         await llm.ainvoke('ping', max_tokens=1, timeout=10)
         response = JSONResponse(content={'live': True, 'message': ''})
         response_time = datetime.now()
         duration = response_time - start_time
-        log.info(f'Chatbot is alive, response duration: {str(duration)}')
+        log.info(f'[CHATBOT] Chatbot is alive, response duration: {str(duration)}')
     except Exception as e:
         response = JSONResponse(content={'live': False, 'message': 'LLM agent is not responding, make sure all settings in system env is correct'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        log.error(f'Error: {traceback.format_exc()}')
+        log.error(f'[CHATBOT] Error: {traceback.format_exc()}')
     return response
 
 @chatbot_router.post('/upload', status_code=status.HTTP_201_CREATED)
@@ -50,20 +50,20 @@ async def upload_attachment(file: UploadFile = File(...), current_user: User = D
         Response body: {'status': 'success', 'data': attachment}/{'status': 'fail', 'error': error message}
     """
     log = user_log(current_user.id)
-    log.info(f'Uploads attachment {file.filename} ({file.content_type}, {file.size} bytes)')
+    log.info(f'[CHATBOT] Uploads attachment {file.filename} ({file.content_type}, {file.size} bytes)')
 
     try:
         attachment = await save_attachment(current_user.id, file)
     except ValueError as err:
-        log.warning(f'Attachment rejected: {err}')
+        log.warning(f'[CHATBOT] Attachment rejected: {err}')
         response = JSONResponse({'status': 'fail', 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response
     except Exception:
-        log.error(f'Failed to store attachment: {traceback.format_exc()}')
+        log.error(f'[CHATBOT] Failed to store attachment: {traceback.format_exc()}')
         response = JSONResponse({'status': 'fail', 'error': 'Could not store the attachment'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, media_type='application/json')
         return response
     attachment_data = attachment.model_dump()
-    log.info(f'Attachment stored: {attachment_data}')
+    log.info(f'[CHATBOT] Attachment stored: {attachment_data}')
     response = JSONResponse({'status': 'success', 'data': attachment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     return response
 
@@ -93,7 +93,7 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
     try:
         blocks = await asyncio.to_thread(attachment_blocks, current_user.id, payload.attachments)
     except ValueError as err:
-        log.warning(f'Attachment rejected: {err}')
+        log.warning(f'[CHATBOT] Attachment rejected: {err}')
         response = JSONResponse({'status': 'fail', 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response
 
@@ -107,12 +107,12 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
     if payload.decision is not None:
         if not pending_actions:
             return JSONResponse({'status': 'fail', 'error': 'No approval is pending on this conversation'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} answers pending approval with: {payload.decision}')
+        log.info(f'[CHATBOT] {start_time.strftime('%Y-%m-%d %H:%M:%S')} answers pending approval with: {payload.decision}')
         graph_input = Command(resume={'decisions': [{'type': payload.decision}] * pending_actions})
     else:
         if pending_actions:
             return JSONResponse({'status': 'fail', 'error': 'An approval is pending; approve or reject it first'}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-        log.info(f'{start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message} (attachments: {payload.attachments})')
+        log.info(f'[CHATBOT] {start_time.strftime('%Y-%m-%d %H:%M:%S')} sends message to chatbox: {payload.message} (attachments: {payload.attachments})')
         # Attachments turn the user turn into a block list; a plain text turn keeps the string form
         user_message = {'role': 'user', 'content': [{'type': 'text', 'text': payload.message or ATTACHMENT_ONLY_MESSAGE}] + blocks if blocks else payload.message}
         if state.values.get('messages'):
@@ -132,7 +132,7 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
                             {'name': a['name'], 'args': a['args'], 'description': a.get('description', '')}
                             for interrupt in chunk['__interrupt__'] for a in interrupt.value['action_requests']
                         ]
-                        log.info(f'Chatbox paused for approval: {[a["name"] for a in actions]}')
+                        log.info(f'[CHATBOT] Chatbox paused for approval: {[a["name"] for a in actions]}')
                         yield json.dumps({'type': 'interrupt', 'actions': actions}) + '\n'
                     continue
                 message, metadata = chunk
@@ -141,9 +141,9 @@ async def chatbox(payload: ChatboxRequest, current_user: User = Depends(get_curr
                     continue
                 yield json.dumps({'type': 'token', 'content': message.content}) + '\n'
             yield json.dumps({'type': 'done'}) + '\n'
-            log.info(f'Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
+            log.info(f'[CHATBOT] Chatbox reply finished, response duration: {str(datetime.now() - start_time)}')
         except Exception:
-            log.error(f'Error: {traceback.format_exc()}')
+            log.error(f'[CHATBOT] Error: {traceback.format_exc()}')
             hint = ' (the configured model may not accept image input)' if payload.attachments else ''
             yield json.dumps({'type': 'error', 'message': f'Error when try to send to LLM{hint}'}) + '\n'
 

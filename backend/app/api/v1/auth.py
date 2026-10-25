@@ -34,19 +34,19 @@ async def login(user_email: str, password: str, db=Depends(get_db)):
         A JWT token to be used as Authorization header
     """
     act_log = system_log()
-    act_log.info(f'Attempting to log in with email: {user_email}')
+    act_log.info(f'[AUTH] Attempting to log in with email: {user_email}')
     user = await db.scalar(select(models.User).filter(models.User.email == user_email))
 
     # Found no user email
     if not user:
-        act_log.warning(f'User with email {user_email} does not exist')
+        act_log.warning(f'[AUTH] User with email {user_email} does not exist')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     if not security.verify_password(password, user.hashed_password):
-        act_log.warning(f'Incorrect password')
+        act_log.warning(f'[AUTH] Incorrect password')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    act_log.info(f'Login Successful, user: {str(user.id)}')
+    act_log.info(f'[AUTH] Login Successful, user: {str(user.id)}')
     return Response(create_access_token(user.id), media_type="application/json", status_code=200)
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -66,7 +66,7 @@ async def logout(
     """
     current_user.tokens_valid_from = datetime.now(timezone.utc)
     await db.commit()
-    user_log(current_user.id).info("Logged out; access tokens issued before now are revoked")
+    user_log(current_user.id).info("[AUTH] Logged out; access tokens issued before now are revoked")
 
 @auth_router.get("/me")
 async def me(current_user: User = Depends(get_current_user)):

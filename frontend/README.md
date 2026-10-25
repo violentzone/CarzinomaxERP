@@ -87,6 +87,10 @@ user holds a flag for; **Users & Access** lives under the HR flag because the
 backend manages users through `/hr`. A user with all four flags is, for display
 purposes, an administrator.
 
+Users & Access also has a per-user **Receive project summary email** toggle
+(`send_summary`, shown in the "Summary" column). It is not an access flag: it
+only marks who the backend's scheduled `summary_mail` job sends to.
+
 If an endpoint returns **403**, the page shows an in-page "Restricted area"
 panel rather than signing you out. A **401** anywhere (expired or revoked
 token) clears the session and returns you to the login screen.

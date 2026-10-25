@@ -32,12 +32,12 @@ async def get_product_list(current_user: User = Depends(get_current_user), db = 
     log = user_log(current_user.id)
     if not await permission_check('scm', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all products')
+    log.info('[PRODUCT] Query all products')
     products = (await db.scalars(select(Product))).all()
     data = []
     for p in products:
         data.append(p.to_dict())
-    log.info(f"{str(len(data))} products found")
+    log.info(f"[PRODUCT] {str(len(data))} products found")
 
     return JSONResponse({
         "status": "success",
@@ -60,15 +60,15 @@ async def get_product(product_id: int, current_user: User = Depends(get_current_
     log = user_log(current_user.id)
     if not await permission_check('scm', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query product ID: {product_id}')
+    log.info(f'[PRODUCT] Query product ID: {product_id}')
 
     product = await db.get(Product, product_id)
     if not product:
-        log.warning(f'Product ID: {product_id} not found')
+        log.warning(f'[PRODUCT] Product ID: {product_id} not found')
         return JSONResponse({"status": "fail", "error": f"Product with id {product_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     product_data = product.to_dict()
-    log.info(f'Query product: {product_data}')
+    log.info(f'[PRODUCT] Query product: {product_data}')
 
     return JSONResponse({"status": "success", "data": product_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -104,12 +104,12 @@ async def create_product(new_product: CreateProduct, current_user: User = Depend
     log = user_log(current_user.id)
     if not await permission_check('scm', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create product with sku: {new_product.sku}')
+    log.info(f'[PRODUCT] Create product with sku: {new_product.sku}')
 
     try:
         existing_product = await db.scalar(select(Product).where(Product.sku == new_product.sku))
         if existing_product:
-            log.warning(f'Product with sku {new_product.sku} already exists')
+            log.warning(f'[PRODUCT] Product with sku {new_product.sku} already exists')
             return JSONResponse({"status": "fail", "error": f"Product with sku '{new_product.sku}' already exists"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
         product = Product(
@@ -123,10 +123,10 @@ async def create_product(new_product: CreateProduct, current_user: User = Depend
         await db.commit()
         await db.refresh(product)
         product_data = product.to_dict()
-        log.info(f'Product created: {product_data}')
+        log.info(f'[PRODUCT] Product created: {product_data}')
         return JSONResponse({"status": "success", "data": product_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create product: {format_exc()}')
+        log.error(f'[PRODUCT] Failed to create product: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -146,11 +146,11 @@ async def update_product(product_id: int, new_product: UpdateProduct, current_us
     log = user_log(current_user.id)
     if not await permission_check('scm', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update product ID: {product_id}')
+    log.info(f'[PRODUCT] Update product ID: {product_id}')
 
     old_product = await db.get(Product, product_id)
     if not old_product:
-        log.warning(f'Product ID: {product_id} not found')
+        log.warning(f'[PRODUCT] Product ID: {product_id} not found')
         return JSONResponse({"status": "fail", "error": f"Product with id {product_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -159,10 +159,10 @@ async def update_product(product_id: int, new_product: UpdateProduct, current_us
                 setattr(old_product, field_name, field_value)
         await db.commit()
         await db.refresh(old_product)
-        log.info(f'Product updated: {old_product.to_dict()}')
+        log.info(f'[PRODUCT] Product updated: {old_product.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update product: {format_exc()}')
+        log.error(f'[PRODUCT] Failed to update product: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -181,18 +181,18 @@ async def delete_product(product_id: int, current_user: User = Depends(get_curre
     log = user_log(current_user.id)
     if not await permission_check('scm', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete product ID: {product_id}')
+    log.info(f'[PRODUCT] Delete product ID: {product_id}')
 
     product = await db.get(Product, product_id)
     if not product:
-        log.warning(f'Product ID: {product_id} not found')
+        log.warning(f'[PRODUCT] Product ID: {product_id} not found')
         return JSONResponse({"status": "fail", "error": f"Product with id {product_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(product)
         await db.commit()
-        log.info(f'Product deleted ID: {product_id}')
+        log.info(f'[PRODUCT] Product deleted ID: {product_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete product: {format_exc()}')
+        log.error(f'[PRODUCT] Failed to delete product: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')

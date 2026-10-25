@@ -1,6 +1,6 @@
 import os
 from typing import Any, Optional
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -35,6 +35,21 @@ class Settings(BaseSettings):
     LLM_API_BASE: str = ""
     LLM_MODEL: str = ""
     LLM_API_KEY: str = ""
+
+    # Outgoing mail (app/core/scheduler.py send_email): SMTP with a Google App Password
+    # Required, sourced from .env, no defaults so nothing provider-specific is hard-coded here
+    SMTP_HOSTNAME: str                        # e.g. smtp.gmail.com
+    SMTP_PORT: int                            # 587 = STARTTLS, 465 = implicit SSL
+    SMTP_PASSWORD: str                        # the 16-char Google App Password
+    MAIL_FROM: str                            # mailbox login and the From address
+
+    # Project summary mail schedule (the `summary_mail` job is planned, not registered yet)
+    # TIME and FREQ are required from .env; WEEKDAY is required only when FREQ=week, MONTHDAY only when FREQ=month
+    # Hour is server local time, the job fires at minute 0
+    SUMMARY_SEND_TIME: int                    # 0-23
+    SUMMARY_SEND_FREQ: str                    # day | week | month
+    SUMMARY_SEND_WEEKDAY: int | None = None   # 0-6, Monday = 0 (APScheduler convention)
+    SUMMARY_SEND_MONTHDAY: int | None = None  # 1-31; 29-31 skip shorter months
 
     # Chat attachments (app/core/uploads.py, POST /chatbot/upload): stored on disk under <UPLOAD_DIR>/<user_id>/, no table, kept forever
     UPLOAD_DIR: str = "uploads"               # relative to backend/ unless absolute
@@ -85,6 +100,52 @@ class Settings(BaseSettings):
             return db_url
             
         return db_url
+
+    @field_validator("SUMMARY_SEND_WEEKDAY", "SUMMARY_SEND_MONTHDAY", mode="before")
+    @classmethod
+    def blank_summary_day_is_none(cls, v: Any) -> Any:
+        """A blank .env line (`SUMMARY_SEND_WEEKDAY=`) arrives as '' and must mean 'not set', not an int parse error."""
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+    @field_validator("SUMMARY_SEND_TIME")
+    @classmethod
+    def check_summary_send_time(cls, v: int) -> int:
+        if not 0 <= v <= 23:
+            raise ValueError(f"SUMMARY_SEND_TIME must be an hour between 0 and 23, got {v}")
+        return v
+
+    @field_validator("SUMMARY_SEND_FREQ", mode="before")
+    @classmethod
+    def check_summary_send_freq(cls, v: Any) -> str:
+        v = str(v).strip().lower()
+        if v not in ("day", "week", "month"):
+            raise ValueError(f"SUMMARY_SEND_FREQ must be one of day, week or month, got '{v}'")
+        return v
+
+    @field_validator("SUMMARY_SEND_WEEKDAY")
+    @classmethod
+    def check_summary_send_weekday(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 0 <= v <= 6:
+            raise ValueError(f"SUMMARY_SEND_WEEKDAY must be between 0 (Monday) and 6 (Sunday), got {v}")
+        return v
+
+    @field_validator("SUMMARY_SEND_MONTHDAY")
+    @classmethod
+    def check_summary_send_monthday(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 1 <= v <= 31:
+            raise ValueError(f"SUMMARY_SEND_MONTHDAY must be between 1 and 31, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def check_summary_schedule(self) -> "Settings":
+        """The day field that SUMMARY_SEND_FREQ needs must be present."""
+        if self.SUMMARY_SEND_FREQ == "week" and self.SUMMARY_SEND_WEEKDAY is None:
+            raise ValueError("SUMMARY_SEND_WEEKDAY is required when SUMMARY_SEND_FREQ=week")
+        if self.SUMMARY_SEND_FREQ == "month" and self.SUMMARY_SEND_MONTHDAY is None:
+            raise ValueError("SUMMARY_SEND_MONTHDAY is required when SUMMARY_SEND_FREQ=month")
+        return self
 
 settings = Settings()
 # Initialize the computed fields
