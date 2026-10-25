@@ -10,9 +10,12 @@ export function num(v) {
   return Number.isFinite(n) ? n : 0
 }
 
+/** The currency the books are kept in; amounts are stored as plain numbers. */
+export const BASE_CURRENCY = 'USD'
+
 const money = new Intl.NumberFormat(undefined, {
   style: 'currency',
-  currency: 'USD',
+  currency: BASE_CURRENCY,
   // plain "$" — without this, non-US locales render "US$"
   currencyDisplay: 'narrowSymbol',
   maximumFractionDigits: 2,
@@ -27,7 +30,7 @@ export function compactCurrency(v) {
   if (Math.abs(n) >= 1000) {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: 'USD',
+      currency: BASE_CURRENCY,
       currencyDisplay: 'narrowSymbol',
       notation: 'compact',
       maximumFractionDigits: 1,

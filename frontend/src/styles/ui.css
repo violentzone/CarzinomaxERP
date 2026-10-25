@@ -618,6 +618,8 @@ textarea.control { resize: vertical; min-height: 68px; }
   gap: var(--s-2);
   align-items: center;
 }
+.form-note { margin-bottom: var(--s-4); align-items: flex-start; }
+.form-note svg { flex: none; margin-top: 2px; color: var(--accent); }
 
 .punch-bar {
   display: flex;

@@ -1,19 +1,25 @@
 """
 Finance module, Query, add, remove and update Finance expense records
 """
+import asyncio
+from datetime import date
+from pathlib import PurePosixPath
 from traceback import format_exc
 from uuid import UUID
 
-from fastapi import Depends, APIRouter
+from fastapi import Depends, APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from starlette import status
 
 from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
+from app.core.finance import investment_from_expense
 from app.core.log_module import user_log
-from app.models import ExpenseType, Finance, User
+from app.core.receipts import extract_receipt
+from app.core.uploads import UPLOAD_ROOT, attachment_path, load_attachment, save_attachment
+from app.models import DevProject, ExpenseCategory, ExpenseType, Finance, User
 
 finance_router = APIRouter(prefix="/finance", tags=["Finance"])
 
@@ -76,11 +82,32 @@ async def get_expense(expense_id: UUID, current_user: User = Depends(get_current
 class CreateExpense(BaseModel):
     expense_type: ExpenseType
     amount: float
+    vendor: str | None = None
+    reference: str | None = None
+    description: str | None = None
+    category: ExpenseCategory | None = None
+    expense_date: date = Field(default_factory=date.today)  # document date, today when recorded by hand
+    due_date: date | None = None
+    paid_date: date | None = None
+    project_id: int | None = None
+    receipt_path: str | None = None  # `receipt_path` returned by POST /finance/receipt
+
+
+# Optional columns the ledger form may clear by sending an explicit null (the other routers ignore nulls)
+CLEARABLE_EXPENSE_FIELDS = ('vendor', 'reference', 'description', 'category', 'due_date', 'paid_date', 'project_id')
 
 
 class UpdateExpense(BaseModel):
     expense_type: ExpenseType | None = None
     amount: float | None = None
+    vendor: str | None = None
+    reference: str | None = None
+    description: str | None = None
+    category: ExpenseCategory | None = None
+    expense_date: date | None = None
+    due_date: date | None = None
+    paid_date: date | None = None
+    project_id: int | None = None
 
 
 @finance_router.post("/expense")
@@ -101,12 +128,26 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
     log.info(f'[EXPENSE] Create expense with type: {new_expense.expense_type}')
 
     try:
-        expense = Finance(expense_type=new_expense.expense_type, amount=new_expense.amount)
+        if new_expense.project_id is not None and not await db.get(DevProject, new_expense.project_id):
+            log.warning(f'[EXPENSE] Dev project ID: {new_expense.project_id} not found')
+            return JSONResponse({"status": "fail", "error": f"Dev project with id {new_expense.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        expense = Finance(**new_expense.model_dump(exclude_none=True))
+        if new_expense.receipt_path is not None:
+            # Only a file POST /finance/receipt stored for this caller may be linked, and it is stored by its canonical "<user_id>/<uuid>.<ext>" path
+            parts = PurePosixPath(new_expense.receipt_path).parts
+            if len(parts) != 2 or parts[0] != str(current_user.id):
+                raise ValueError(f'Unknown receipt {new_expense.receipt_path}')
+            expense.receipt_path = attachment_path(current_user.id, PurePosixPath(parts[1]).stem).relative_to(UPLOAD_ROOT).as_posix()
         db.add(expense)
+        investment = investment_from_expense(expense)
+        if investment:
+            db.add(investment)
         await db.commit()
         await db.refresh(expense)
         expense_data = expense.to_dict()
         log.info(f'[EXPENSE] Expense created: {expense_data}')
+        if investment:
+            log.info(f'[EXPENSE] Expense {expense.id} mirrored as dev investment {investment.id}')
         return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'[EXPENSE] Failed to create expense: {format_exc()}')
@@ -137,8 +178,12 @@ async def update_expense(expense_id: UUID, new_expense: UpdateExpense, current_u
         return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
+        if new_expense.project_id is not None and not await db.get(DevProject, new_expense.project_id):
+            log.warning(f'[EXPENSE] Dev project ID: {new_expense.project_id} not found')
+            return JSONResponse({"status": "fail", "error": f"Dev project with id {new_expense.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         for field_name, field_value in new_expense:
-            if field_value is not None:
+            # A null that was sent on purpose clears a clearable field, e.g. re-opening a bill by clearing paid_date
+            if field_value is not None or (field_name in CLEARABLE_EXPENSE_FIELDS and field_name in new_expense.model_fields_set):
                 setattr(old_expense, field_name, field_value)
         await db.commit()
         await db.refresh(old_expense)
@@ -179,3 +224,53 @@ async def delete_expense(expense_id: UUID, current_user: User = Depends(get_curr
     except Exception as err:
         log.error(f'[EXPENSE] Failed to delete expense: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+
+
+@finance_router.post("/receipt")
+async def read_receipt(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Store one receipt or invoice (PNG, JPEG, WebP or PDF) and read it into an expense draft; nothing is booked until the client posts the draft to `POST /finance/expense`
+    Args:
+        file: Multipart field `file`; the type is sniffed from the bytes, the declared content type is ignored
+        current_user: Signed in user, the file is stored under the caller's upload directory
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Response body: {'status': 'success', 'data': {'receipt_path': path, 'draft': draft | None, 'note': why the draft is None}}/{'status': 'fail', 'error': error message}
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('finance', current_user.id, db):
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+    log.info(f'[RECEIPT] Reads receipt {file.filename} ({file.content_type}, {file.size} bytes)')
+
+    try:
+        attachment = await save_attachment(current_user.id, file)
+    except ValueError as err:
+        log.warning(f'[RECEIPT] Receipt rejected: {err}')
+        return JSONResponse({"status": "fail", "error": str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+    except Exception:
+        log.error(f'[RECEIPT] Failed to store receipt: {format_exc()}')
+        return JSONResponse({"status": "fail", "error": "Could not store the receipt"}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, media_type='application/json')
+
+    # The file is stored whatever the model does, so the user can still book by hand with the receipt attached
+    receipt_path = attachment_path(current_user.id, attachment.id).relative_to(UPLOAD_ROOT).as_posix()
+    projects = (await db.execute(select(DevProject.project_id, DevProject.project_name))).all()
+    try:
+        loaded = await asyncio.to_thread(load_attachment, current_user.id, attachment.id)
+        draft = await extract_receipt(loaded, [name for _, name in projects])
+    except ValueError as err:
+        log.warning(f'[RECEIPT] Receipt {receipt_path} not readable: {err}')
+        response = JSONResponse({"status": "success", "data": {'receipt_path': receipt_path, 'draft': None, 'note': str(err)}}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return response
+    except Exception:
+        log.error(f'[RECEIPT] Failed to read receipt {receipt_path}: {format_exc()}')
+        response = JSONResponse({"status": "success", "data": {'receipt_path': receipt_path, 'draft': None, 'note': 'The model could not be reached, fill in the expense by hand'}}, status_code=status.HTTP_200_OK, media_type='application/json')
+        return response
+
+    # The model returns a project name from the list it was given; the client needs the id
+    wanted = (draft.project_name or '').strip().casefold()
+    project_id = next((pid for pid, name in projects if wanted and name.strip().casefold() == wanted), None)
+    receipt_data = {'receipt_path': receipt_path, 'draft': {**draft.model_dump(), 'project_id': project_id}, 'note': None}
+    log.info(f'[RECEIPT] Receipt read: {receipt_data}')
+    response = JSONResponse({"status": "success", "data": receipt_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return response

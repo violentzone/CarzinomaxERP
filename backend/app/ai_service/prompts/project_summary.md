@@ -17,9 +17,10 @@ Total net pay paid this month and the next payment date of a draft paycheck
 ## Finance
 How many expense record and the total amount
 Total amount per expense type (paycheck, petty_cash, investment, other)
-Total amount this month compared with last month
+Total amount this month compared with last month (by expense date)
 Largest single expense
 When the newest expense was recorded
+How many expense unpaid and their total, how many of them overdue and their total, and the next due date
 
 ## SCM
 How many product
@@ -30,7 +31,7 @@ How many product without description
 ## Dev Tracking
 How many project and how many without a tracked GitHub repo
 Total investment and investment this month
-Total investment per category (cloud, software_licenses, hardware, consulting)
+Total investment per category (cloud, software_licenses, hardware, consulting, other)
 How many tracked GitHub repo, total stars and total downloads
 When the last GitHub sync ran and how many repo have a sync error
 How many download snapshot and the date of the newest one

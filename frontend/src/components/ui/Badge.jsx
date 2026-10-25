@@ -25,11 +25,16 @@ const STATUS_TONE = {
   sick: 'warning',
   unpaid: 'neutral',
   parental: 'success',
-  // dev investment categories
+  // dev investment / expense categories
   cloud: 'info',
   software_licenses: 'success',
   hardware: 'warning',
   consulting: 'danger',
+  travel: 'info',
+  office: 'neutral',
+  meals: 'warning',
+  // expense payment state (unpaid shares the leave-type tone above)
+  overdue: 'danger',
   // download platforms
   github: 'neutral',
   dockerhub: 'info',

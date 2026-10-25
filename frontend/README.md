@@ -110,9 +110,17 @@ token) clears the session and returns you to the login screen.
   deductions) on save unless you type a value. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
   new log at "now", or closes their latest open log and fills `total_hours`.
-- **Finance** — the ledger records each expense's type and amount; the Overview
-  tab pulls its totals from paychecks, investments and the product catalog,
-  showing only what your flags allow.
+- **Finance** — the ledger records each expense's type, amount, vendor, invoice
+  number, category, document / due / paid dates and an optional project (the
+  project field and column appear only with dev access). **Book from receipt**
+  uploads a PNG / JPEG / WebP / PDF (10 MB), the backend's AI reads it
+  (`POST /finance/receipt`) and the create modal opens prefilled with the draft
+  and a note on confidence; nothing is saved until you press Save, which posts
+  the normal create with the `receipt_path`. If the document could not be read
+  the empty form opens with the file still attached. Filters: type and payment
+  status (unpaid / overdue / paid); tiles show booked, unpaid and overdue totals.
+  The Overview tab pulls its totals from paychecks, investments and the product
+  catalog plus the ledger, showing only what your flags allow.
 - **Purchases** — the SCM router is a product catalog (SKU, cost, list price).
 - **Assistant** — the chat drawer (topbar button) streams the orchestrator's reply;
   deletes pause for your approval. The paperclip or a pasted image attaches

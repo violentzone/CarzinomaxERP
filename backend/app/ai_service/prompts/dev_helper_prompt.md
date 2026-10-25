@@ -38,7 +38,7 @@ A `get_*` tool returns nothing when no record matches; report that as "no record
 - `get_dev_project`: projects by `project_id` or exact `project_name`; no filter returns all.
   `create_dev_project` / `update_dev_project`: name and description.
 - `get_dev_investment`: investments by `project_id`, `start_date` / `end_date` (inclusive, by
-  investment date), `vendor` or `category` (cloud, software_licenses, hardware, consulting);
+  investment date), `vendor` or `category` (cloud, software_licenses, hardware, consulting, other);
   `total` sums the returned amounts. `create_dev_investment`: project, date, amount, category,
   optional vendor and description. `update_dev_investment`: changes any of those by investment
   `id`.
