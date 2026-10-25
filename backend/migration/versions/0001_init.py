@@ -35,6 +35,7 @@ def _seed_admin_user() -> None:
         sa.column("has_scm_access", sa.Boolean),
         sa.column("has_hr_access", sa.Boolean),
         sa.column("has_dev_access", sa.Boolean),
+        sa.column("send_summary", sa.Boolean),
         sa.column("created_at", sa.DateTime(timezone=True)),
         sa.column("updated_at", sa.DateTime(timezone=True)),
     )
@@ -47,6 +48,7 @@ def _seed_admin_user() -> None:
         "has_scm_access": True,
         "has_hr_access": True,
         "has_dev_access": True,
+        "send_summary": True,
         "created_at": now,
         "updated_at": now,
     }])
@@ -106,6 +108,7 @@ def upgrade() -> None:
     sa.Column('has_scm_access', sa.Boolean(), nullable=False),
     sa.Column('has_hr_access', sa.Boolean(), nullable=False),
     sa.Column('has_dev_access', sa.Boolean(), nullable=False),
+    sa.Column('send_summary', sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column('tokens_valid_from', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
@@ -189,7 +192,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('pay_period_start', sa.Date(), nullable=False),
-    sa.Column('pay_period_end', sa.Date(), nullable=False),
+    sa.Column('pay_period_end', sa.Date(), nullable=True),
     sa.Column('base_salary', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('allowances', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('deductions', sa.Numeric(precision=15, scale=2), nullable=False),

@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(logs_dir, exist_ok=True)
 
     log = system_log()
-    log.info("INFO: System Starting...")
+    log.info("[MAIN] INFO: System Starting...")
 
     banner = r"""
    ______                _                                     ____  _______    __
@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
                 has_scm_access=True,
                 has_hr_access=True,
                 has_dev_access=True,
+                send_summary=True,
             )
             session.add(admin_user)
             await session.commit()
@@ -71,9 +72,9 @@ async def lifespan(app: FastAPI):
     # not block startup, so the rest of the ERP stays usable without an LLM.
     try:
         llm_test = llm.invoke('ping', max_tokens=1)
-        log.info(f"LLM ready ({settings.LLM_TYPE}: {settings.LLM_MODEL})")
+        log.info(f"[MAIN] LLM ready ({settings.LLM_TYPE}: {settings.LLM_MODEL})")
     except Exception as e:
-        log.error(f"LLM check failed, AI features unavailable: {e}")
+        log.error(f"[MAIN] LLM check failed, AI features unavailable: {e}")
 
     # Start background scheduler
     start_scheduler()
@@ -82,7 +83,7 @@ async def lifespan(app: FastAPI):
     # Shutdown background scheduler
     shutdown_scheduler()
     shutdown_log = system_log()
-    shutdown_log.info("INFO: System Stopping...")
+    shutdown_log.info("[MAIN] INFO: System Stopping...")
 
     shutdown_banner = r"""
   ____                 _ _

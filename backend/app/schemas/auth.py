@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     has_scm_access: Optional[bool] = False
     has_hr_access: Optional[bool] = False
     has_dev_access: Optional[bool] = False
+    send_summary: Optional[bool] = False
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -27,6 +28,7 @@ class UserCreate(BaseModel):
     has_scm_access: Optional[bool] = False
     has_hr_access: Optional[bool] = False
     has_dev_access: Optional[bool] = False
+    send_summary: Optional[bool] = False
 
 class UserUpdate(UserBase):
     password: Optional[str] = None

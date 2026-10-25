@@ -200,7 +200,7 @@ async def save_project_snapshots(db: AsyncSession, project_ids: set[int], day: d
         snapshots = (await db.scalars(snapshot_stmt)).all()
         star_total = None if stars is None else int(stars)
         if len(snapshots) > 1:
-            system_log.warning(f'GitHub sync: project {project_id} has {len(snapshots)} github snapshots for {day}, updating the oldest (id {snapshots[0].id})')
+            system_log.warning(f'[GITHUB] GitHub sync: project {project_id} has {len(snapshots)} github snapshots for {day}, updating the oldest (id {snapshots[0].id})')
         if snapshots:
             snapshots[0].download_count = int(downloads)
             snapshots[0].star_count = star_total
@@ -233,19 +233,19 @@ async def sync_github_repos(db: AsyncSession, repo_id: int | None = None) -> Git
                     stats = await fetch_repo_stats(client, repo.full_name)
                 except ValueError as err:
                     repo.last_error = str(err)
-                    system_log.warning(f'GitHub sync {repo.full_name}: {err}')
+                    system_log.warning(f'[GITHUB] GitHub sync {repo.full_name}: {err}')
                     failed.append(repo)
                     continue
                 except Exception as err:
                     repo.last_error = f'unexpected error: {err}'
-                    system_log.error(f'GitHub sync {repo.full_name} crashed: {format_exc()}')
+                    system_log.error(f'[GITHUB] GitHub sync {repo.full_name} crashed: {format_exc()}')
                     failed.append(repo)
                     continue
                 repo.star_count = stats.star_count
                 repo.download_count = stats.download_count
                 repo.last_synced_at = now
                 repo.last_error = None
-                system_log.info(f'GitHub sync {repo.full_name}: {stats.star_count} stars, {stats.download_count} downloads')
+                system_log.info(f'[GITHUB] GitHub sync {repo.full_name}: {stats.star_count} stars, {stats.download_count} downloads')
                 synced.append(repo)
 
         try:
@@ -256,5 +256,5 @@ async def sync_github_repos(db: AsyncSession, repo_id: int | None = None) -> Git
             raise
 
     result = GithubSyncResult(synced=[repo.to_dict() for repo in synced], failed=[repo.to_dict() for repo in failed])
-    system_log.info(f'GitHub sync finished: {len(result.synced)} synced, {len(result.failed)} failed')
+    system_log.info(f'[GITHUB] GitHub sync finished: {len(result.synced)} synced, {len(result.failed)} failed')
     return result

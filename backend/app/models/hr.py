@@ -46,7 +46,7 @@ class Paycheck(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     pay_period_start: Mapped[date] = mapped_column(Date, nullable=False)
-    pay_period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    pay_period_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # NULL = open-ended, the member is still working
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)

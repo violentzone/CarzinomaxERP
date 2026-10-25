@@ -36,12 +36,12 @@ async def get_project_list(current_user: User = Depends(get_current_user), db = 
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all dev projects')
+    log.info('[PROJECT] Query all dev projects')
     projects = (await db.scalars(select(DevProject))).all()
     data = []
     for p in projects:
         data.append(p.to_dict())
-    log.info(f"{str(len(data))} dev projects found")
+    log.info(f"[PROJECT] {str(len(data))} dev projects found")
 
     return JSONResponse({
         "status": "success",
@@ -64,15 +64,15 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query dev project ID: {project_id}')
+    log.info(f'[PROJECT] Query dev project ID: {project_id}')
 
     project = await db.get(DevProject, project_id)
     if not project:
-        log.warning(f'Dev project ID: {project_id} not found')
+        log.warning(f'[PROJECT] Dev project ID: {project_id} not found')
         return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     project_data = project.to_dict()
-    log.info(f'Query dev project: {project_data}')
+    log.info(f'[PROJECT] Query dev project: {project_data}')
 
     return JSONResponse({"status": "success", "data": project_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -102,7 +102,7 @@ async def create_project(new_project: CreateProject, current_user: User = Depend
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create dev project with name: {new_project.project_name}')
+    log.info(f'[PROJECT] Create dev project with name: {new_project.project_name}')
 
     try:
         project = DevProject(
@@ -113,10 +113,10 @@ async def create_project(new_project: CreateProject, current_user: User = Depend
         await db.commit()
         await db.refresh(project)
         project_data = project.to_dict()
-        log.info(f'Dev project created: {project_data}')
+        log.info(f'[PROJECT] Dev project created: {project_data}')
         return JSONResponse({"status": "success", "data": project_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create dev project: {format_exc()}')
+        log.error(f'[PROJECT] Failed to create dev project: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -136,11 +136,11 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update dev project ID: {project_id}')
+    log.info(f'[PROJECT] Update dev project ID: {project_id}')
 
     old_project = await db.get(DevProject, project_id)
     if not old_project:
-        log.warning(f'Dev project ID: {project_id} not found')
+        log.warning(f'[PROJECT] Dev project ID: {project_id} not found')
         return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -149,10 +149,10 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
                 setattr(old_project, field_name, field_value)
         await db.commit()
         await db.refresh(old_project)
-        log.info(f'Dev project updated: {old_project.to_dict()}')
+        log.info(f'[PROJECT] Dev project updated: {old_project.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update dev project: {format_exc()}')
+        log.error(f'[PROJECT] Failed to update dev project: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -171,20 +171,20 @@ async def delete_project(project_id: int, current_user: User = Depends(get_curre
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete dev project ID: {project_id}')
+    log.info(f'[PROJECT] Delete dev project ID: {project_id}')
 
     project = await db.get(DevProject, project_id)
     if not project:
-        log.warning(f'Dev project ID: {project_id} not found')
+        log.warning(f'[PROJECT] Dev project ID: {project_id} not found')
         return JSONResponse({"status": "fail", "error": f"Project with id {project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(project)
         await db.commit()
-        log.info(f'Dev project deleted ID: {project_id}')
+        log.info(f'[PROJECT] Dev project deleted ID: {project_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete dev project: {format_exc()}')
+        log.error(f'[PROJECT] Failed to delete dev project: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -206,12 +206,12 @@ async def get_investment_list(current_user: User = Depends(get_current_user), db
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all dev investments')
+    log.info('[INVESTMENT] Query all dev investments')
     investments = (await db.scalars(select(DevInvestment))).all()
     data = []
     for i in investments:
         data.append(i.to_dict())
-    log.info(f"{str(len(data))} dev investments found")
+    log.info(f"[INVESTMENT] {str(len(data))} dev investments found")
 
     return JSONResponse({
         "status": "success",
@@ -234,15 +234,15 @@ async def get_investment(investment_id: int, current_user: User = Depends(get_cu
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query dev investment ID: {investment_id}')
+    log.info(f'[INVESTMENT] Query dev investment ID: {investment_id}')
 
     investment = await db.get(DevInvestment, investment_id)
     if not investment:
-        log.warning(f'Dev investment ID: {investment_id} not found')
+        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
         return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     investment_data = investment.to_dict()
-    log.info(f'Query dev investment: {investment_data}')
+    log.info(f'[INVESTMENT] Query dev investment: {investment_data}')
 
     return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -280,12 +280,12 @@ async def create_investment(new_investment: CreateInvestment, current_user: User
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create dev investment for project ID: {new_investment.project_id}')
+    log.info(f'[INVESTMENT] Create dev investment for project ID: {new_investment.project_id}')
 
     try:
         project = await db.get(DevProject, new_investment.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_investment.project_id} not found')
+            log.warning(f'[INVESTMENT] Dev project ID: {new_investment.project_id} not found')
             return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         investment = DevInvestment(
@@ -300,10 +300,10 @@ async def create_investment(new_investment: CreateInvestment, current_user: User
         await db.commit()
         await db.refresh(investment)
         investment_data = investment.to_dict()
-        log.info(f'Dev investment created: {investment_data}')
+        log.info(f'[INVESTMENT] Dev investment created: {investment_data}')
         return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create dev investment: {format_exc()}')
+        log.error(f'[INVESTMENT] Failed to create dev investment: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -323,17 +323,17 @@ async def update_investment(investment_id: int, new_investment: UpdateInvestment
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update dev investment ID: {investment_id}')
+    log.info(f'[INVESTMENT] Update dev investment ID: {investment_id}')
 
     old_investment = await db.get(DevInvestment, investment_id)
     if not old_investment:
-        log.warning(f'Dev investment ID: {investment_id} not found')
+        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
         return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     if new_investment.project_id is not None:
         project = await db.get(DevProject, new_investment.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_investment.project_id} not found')
+            log.warning(f'[INVESTMENT] Dev project ID: {new_investment.project_id} not found')
             return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -342,10 +342,10 @@ async def update_investment(investment_id: int, new_investment: UpdateInvestment
                 setattr(old_investment, field_name, field_value)
         await db.commit()
         await db.refresh(old_investment)
-        log.info(f'Dev investment updated: {old_investment.to_dict()}')
+        log.info(f'[INVESTMENT] Dev investment updated: {old_investment.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update dev investment: {format_exc()}')
+        log.error(f'[INVESTMENT] Failed to update dev investment: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -364,20 +364,20 @@ async def delete_investment(investment_id: int, current_user: User = Depends(get
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete dev investment ID: {investment_id}')
+    log.info(f'[INVESTMENT] Delete dev investment ID: {investment_id}')
 
     investment = await db.get(DevInvestment, investment_id)
     if not investment:
-        log.warning(f'Dev investment ID: {investment_id} not found')
+        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
         return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(investment)
         await db.commit()
-        log.info(f'Dev investment deleted ID: {investment_id}')
+        log.info(f'[INVESTMENT] Dev investment deleted ID: {investment_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete dev investment: {format_exc()}')
+        log.error(f'[INVESTMENT] Failed to delete dev investment: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -399,12 +399,12 @@ async def get_download_list(current_user: User = Depends(get_current_user), db =
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('Query all project downloads')
+    log.info('[DOWNLOAD] Query all project downloads')
     downloads = (await db.scalars(select(ProjectDownload))).all()
     data = []
     for d in downloads:
         data.append(d.to_dict())
-    log.info(f"{str(len(data))} project downloads found")
+    log.info(f"[DOWNLOAD] {str(len(data))} project downloads found")
 
     return JSONResponse({
         "status": "success",
@@ -427,15 +427,15 @@ async def get_download(download_id: int, current_user: User = Depends(get_curren
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Query project download ID: {download_id}')
+    log.info(f'[DOWNLOAD] Query project download ID: {download_id}')
 
     download = await db.get(ProjectDownload, download_id)
     if not download:
-        log.warning(f'Project download ID: {download_id} not found')
+        log.warning(f'[DOWNLOAD] Project download ID: {download_id} not found')
         return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     download_data = download.to_dict()
-    log.info(f'Query project download: {download_data}')
+    log.info(f'[DOWNLOAD] Query project download: {download_data}')
 
     return JSONResponse({"status": "success", "data": download_data}, status_code=status.HTTP_200_OK, media_type='application/json')
 
@@ -471,12 +471,12 @@ async def create_download(new_download: CreateDownload, current_user: User = Dep
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Create project download for project ID: {new_download.project_id}')
+    log.info(f'[DOWNLOAD] Create project download for project ID: {new_download.project_id}')
 
     try:
         project = await db.get(DevProject, new_download.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_download.project_id} not found')
+            log.warning(f'[DOWNLOAD] Dev project ID: {new_download.project_id} not found')
             return JSONResponse({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
         download = ProjectDownload(
@@ -490,10 +490,10 @@ async def create_download(new_download: CreateDownload, current_user: User = Dep
         await db.commit()
         await db.refresh(download)
         download_data = download.to_dict()
-        log.info(f'Project download created: {download_data}')
+        log.info(f'[DOWNLOAD] Project download created: {download_data}')
         return JSONResponse({"status": "success", "data": download_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to create project download: {format_exc()}')
+        log.error(f'[DOWNLOAD] Failed to create project download: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -513,17 +513,17 @@ async def update_download(download_id: int, new_download: UpdateDownload, curren
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Update project download ID: {download_id}')
+    log.info(f'[DOWNLOAD] Update project download ID: {download_id}')
 
     old_download = await db.get(ProjectDownload, download_id)
     if not old_download:
-        log.warning(f'Project download ID: {download_id} not found')
+        log.warning(f'[DOWNLOAD] Project download ID: {download_id} not found')
         return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     if new_download.project_id is not None:
         project = await db.get(DevProject, new_download.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_download.project_id} not found')
+            log.warning(f'[DOWNLOAD] Dev project ID: {new_download.project_id} not found')
             return JSONResponse({"status": "fail", "error": f"Project with id {new_download.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
@@ -532,10 +532,10 @@ async def update_download(download_id: int, new_download: UpdateDownload, curren
                 setattr(old_download, field_name, field_value)
         await db.commit()
         await db.refresh(old_download)
-        log.info(f'Project download updated: {old_download.to_dict()}')
+        log.info(f'[DOWNLOAD] Project download updated: {old_download.to_dict()}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to update project download: {format_exc()}')
+        log.error(f'[DOWNLOAD] Failed to update project download: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -554,20 +554,20 @@ async def delete_download(download_id: int, current_user: User = Depends(get_cur
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'Delete project download ID: {download_id}')
+    log.info(f'[DOWNLOAD] Delete project download ID: {download_id}')
 
     download = await db.get(ProjectDownload, download_id)
     if not download:
-        log.warning(f'Project download ID: {download_id} not found')
+        log.warning(f'[DOWNLOAD] Project download ID: {download_id} not found')
         return JSONResponse({"status": "fail", "error": f"Download with id {download_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
         await db.delete(download)
         await db.commit()
-        log.info(f'Project download deleted ID: {download_id}')
+        log.info(f'[DOWNLOAD] Project download deleted ID: {download_id}')
         return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
     except Exception as err:
-        log.error(f'Failed to delete project download: {format_exc()}')
+        log.error(f'[DOWNLOAD] Failed to delete project download: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
@@ -631,12 +631,12 @@ async def get_github_repo_list(current_user: User = Depends(get_current_user), d
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info('Query all GitHub repos')
+    log.info('[GITHUB_REPO] Query all GitHub repos')
     repos = (await db.scalars(select(GithubRepo).order_by(GithubRepo.id))).all()
     data = []
     for r in repos:
         data.append(r.to_dict())
-    log.info(f"{str(len(data))} GitHub repos found")
+    log.info(f"[GITHUB_REPO] {str(len(data))} GitHub repos found")
 
     response = JSONResponse({"status": "success", "data": data}, status_code=status.HTTP_200_OK, media_type='application/json')
     return response
@@ -658,16 +658,16 @@ async def get_github_repo(repo_id: int, current_user: User = Depends(get_current
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info(f'Query GitHub repo ID: {repo_id}')
+    log.info(f'[GITHUB_REPO] Query GitHub repo ID: {repo_id}')
 
     repo = await db.get(GithubRepo, repo_id)
     if not repo:
-        log.warning(f'GitHub repo ID: {repo_id} not found')
+        log.warning(f'[GITHUB_REPO] GitHub repo ID: {repo_id} not found')
         response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         return response
 
     repo_data = repo.to_dict()
-    log.info(f'Query GitHub repo: {repo_data}')
+    log.info(f'[GITHUB_REPO] Query GitHub repo: {repo_data}')
 
     response = JSONResponse({"status": "success", "data": repo_data}, status_code=status.HTTP_200_OK, media_type='application/json')
     return response
@@ -699,17 +699,17 @@ async def create_github_repo(new_repo: CreateGithubRepo, current_user: User = De
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info(f'Track GitHub repo {new_repo.full_name} for project ID: {new_repo.project_id}')
+    log.info(f'[GITHUB_REPO] Track GitHub repo {new_repo.full_name} for project ID: {new_repo.project_id}')
 
     try:
         full_name = parse_repo_full_name(new_repo.full_name)
         project = await db.get(DevProject, new_repo.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_repo.project_id} not found')
+            log.warning(f'[GITHUB_REPO] Dev project ID: {new_repo.project_id} not found')
             response = JSONResponse({"status": "fail", "error": f"Project with id {new_repo.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
             return response
         if await _find_tracked_repo(db, full_name):
-            log.warning(f'GitHub repo {full_name} is already tracked')
+            log.warning(f'[GITHUB_REPO] GitHub repo {full_name} is already tracked')
             response = JSONResponse({"status": "fail", "error": f"GitHub repo {full_name} is already tracked"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
             return response
 
@@ -718,11 +718,11 @@ async def create_github_repo(new_repo: CreateGithubRepo, current_user: User = De
         await db.commit()
         await db.refresh(repo)
         repo_data = repo.to_dict()
-        log.info(f'GitHub repo tracked: {repo_data}')
+        log.info(f'[GITHUB_REPO] GitHub repo tracked: {repo_data}')
         response = JSONResponse({"status": "success", "data": repo_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
         return response
     except Exception as err:
-        log.error(f'Failed to track GitHub repo: {format_exc()}')
+        log.error(f'[GITHUB_REPO] Failed to track GitHub repo: {format_exc()}')
         response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response
 
@@ -744,18 +744,18 @@ async def update_github_repo(repo_id: int, new_repo: UpdateGithubRepo, current_u
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info(f'Update GitHub repo ID: {repo_id}')
+    log.info(f'[GITHUB_REPO] Update GitHub repo ID: {repo_id}')
 
     old_repo = await db.get(GithubRepo, repo_id)
     if not old_repo:
-        log.warning(f'GitHub repo ID: {repo_id} not found')
+        log.warning(f'[GITHUB_REPO] GitHub repo ID: {repo_id} not found')
         response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         return response
 
     if new_repo.project_id is not None:
         project = await db.get(DevProject, new_repo.project_id)
         if not project:
-            log.warning(f'Dev project ID: {new_repo.project_id} not found')
+            log.warning(f'[GITHUB_REPO] Dev project ID: {new_repo.project_id} not found')
             response = JSONResponse({"status": "fail", "error": f"Project with id {new_repo.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
             return response
 
@@ -766,11 +766,11 @@ async def update_github_repo(repo_id: int, new_repo: UpdateGithubRepo, current_u
             await _rename_github_repo(db, old_repo, new_repo.full_name)
         await db.commit()
         await db.refresh(old_repo)
-        log.info(f'GitHub repo updated: {old_repo.to_dict()}')
+        log.info(f'[GITHUB_REPO] GitHub repo updated: {old_repo.to_dict()}')
         response = JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
         return response
     except Exception as err:
-        log.error(f'Failed to update GitHub repo: {format_exc()}')
+        log.error(f'[GITHUB_REPO] Failed to update GitHub repo: {format_exc()}')
         response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response
 
@@ -791,22 +791,22 @@ async def delete_github_repo(repo_id: int, current_user: User = Depends(get_curr
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info(f'Delete GitHub repo ID: {repo_id}')
+    log.info(f'[GITHUB_REPO] Delete GitHub repo ID: {repo_id}')
 
     repo = await db.get(GithubRepo, repo_id)
     if not repo:
-        log.warning(f'GitHub repo ID: {repo_id} not found')
+        log.warning(f'[GITHUB_REPO] GitHub repo ID: {repo_id} not found')
         response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         return response
 
     try:
         await db.delete(repo)
         await db.commit()
-        log.info(f'GitHub repo deleted ID: {repo_id}')
+        log.info(f'[GITHUB_REPO] GitHub repo deleted ID: {repo_id}')
         response = JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
         return response
     except Exception as err:
-        log.error(f'Failed to delete GitHub repo: {format_exc()}')
+        log.error(f'[GITHUB_REPO] Failed to delete GitHub repo: {format_exc()}')
         response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response
 
@@ -832,10 +832,10 @@ async def github_sync(repo_id: int | None = None, current_user: User = Depends(g
     if not await permission_check('dev', current_user.id, db):
         response = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
         return response
-    log.info(f'Manual GitHub sync requested for repo ID: {repo_id if repo_id is not None else "all"}')
+    log.info(f'[GITHUB_SYNC] Manual GitHub sync requested for repo ID: {repo_id if repo_id is not None else "all"}')
 
     if repo_id is not None and not await db.get(GithubRepo, repo_id):
-        log.warning(f'GitHub repo ID: {repo_id} not found')
+        log.warning(f'[GITHUB_SYNC] GitHub repo ID: {repo_id} not found')
         response = JSONResponse({"status": "fail", "error": f"GitHub repo with id {repo_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         return response
 
@@ -844,6 +844,6 @@ async def github_sync(repo_id: int | None = None, current_user: User = Depends(g
         response = JSONResponse({"status": "success", "data": {"synced": result.synced, "failed": result.failed}}, status_code=status.HTTP_200_OK, media_type='application/json')
         return response
     except Exception as err:
-        log.error(f'GitHub sync failed: {format_exc()}')
+        log.error(f'[GITHUB_SYNC] GitHub sync failed: {format_exc()}')
         response = JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         return response

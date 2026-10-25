@@ -76,22 +76,22 @@ async def permission_check(endpoint: Literal['finance', 'scm', 'hr', 'dev'], log
 
     if endpoint == 'finance':
         if not user.has_finance_access:
-            log.warning('User did not have finance access.')
+            log.warning('[GENERAL] User did not have finance access.')
             return False
     elif endpoint == 'scm':
         if not user.has_scm_access:
-            log.warning('User did not have scm access.')
+            log.warning('[GENERAL] User did not have scm access.')
             return False
     elif endpoint == 'hr':
         if not user.has_hr_access:
-            log.warning('User did not have hr access.')
+            log.warning('[GENERAL] User did not have hr access.')
             return False
     elif endpoint == 'dev':
         if not user.has_dev_access:
-            log.warning('User did not have dev access.')
+            log.warning('[GENERAL] User did not have dev access.')
             return False
     else:
         # Shall not happen cus parameter already defined, but still chek
         raise ValueError('Endpoint must be either "scm" or "hr" or "dev"')
-    log.info(f'User permitted with {endpoint} endpoint.')
+    log.info(f'[GENERAL] User permitted with {endpoint} endpoint.')
     return True

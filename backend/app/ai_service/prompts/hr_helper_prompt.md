@@ -33,11 +33,13 @@ access, departments, attendance logs, leave review and paychecks.
 
 A `get_*` tool returns nothing when no record matches; report that as "no record found".
 
-- `get_user_info`: looks up users by `target_user_id`, `target_user_name` (exact full name) or
-  access flags; no filter returns everyone.
-- `create_user`: creates a login with email, password, optional full name and the four access
-  flags (default off). `update_user`: changes name, email, password, active state or access
-  flags of one user by ID.
+- `get_user_info`: looks up users by `target_user_id`, `target_user_name` (exact full name),
+  access flags or `send_summary`; no filter returns everyone.
+- `create_user`: creates a login with email, password, optional full name, the four access
+  flags (default off) and `send_summary` (default off). `update_user`: changes name, email,
+  password, active state, access flags or `send_summary` of one user by ID.
+  `send_summary` means the user receives the periodic project summary email; only active
+  users with it on are mailed.
 - `get_departments`: lists departments by ID, code, part of the name or manager.
   `create_department` / `update_department`: code, name, manager user ID.
 - `get_attendance`: completed records of all users (or one `user_id`) between `start_date` and
@@ -52,7 +54,8 @@ A `get_*` tool returns nothing when no record matches; report that as "no record
   reviewer's user ID, which the orchestrator must give you.
 - `get_paychecks`: paychecks by user, ID, period overlap or status (draft / paid); `total` sums
   `net_pay` of the returned rows.
-- `create_paycheck`: period, base salary, payment date, optional allowances and deductions;
+- `create_paycheck`: period start, base salary, payment date, optional period end (leave it
+  out when the member is still working: an open-ended paycheck), allowances and deductions;
   net pay is computed when not given. `update_paycheck`: changes amounts, dates or marks a
   paycheck `paid` by ID.
 

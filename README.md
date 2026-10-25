@@ -64,10 +64,10 @@ wired in but not yet driving any feature.
 | **Finance** | 🚧 Minimal | Typed expense ledger (paycheck / petty cash / investment / other). The Finance overview rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
-| **LLM router** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm): hosted APIs or a local server. Connection is verified at startup; chat, streaming and schema-validated (parsed) calls are ready |
+| **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF can be attached to a message and the assistant reads it (the configured model must accept image input, see "Pick an LLM"); booking an expense from it is still planned |
 | **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. Not built yet |
-| **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h). Monthly payroll run is still planned |
+| **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
 future AI agent share one contract:
@@ -111,6 +111,8 @@ cd carzinomax-dev
 # App settings and secrets — copy the example and fill in your values
 cp backend/.env.example backend/.env
 #   ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
+#   SMTP_HOSTNAME / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password)
+#   SUMMARY_SEND_TIME (hour 0-23) / SUMMARY_SEND_FREQ (day|week|month), plus SUMMARY_SEND_WEEKDAY (0-6, Mon=0) for week or SUMMARY_SEND_MONTHDAY (1-31) for month
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
 #   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (chat attachments; default backend/uploads and 10 MB per file)
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
@@ -189,7 +191,7 @@ backend/
 │   ├── api/
 │   │   ├── common/        # get_current_user (JWT) and per-module permission_check
 │   │   └── v1/            # Routers: auth, hr, finance, scm, dev_tracking, chatbot
-│   ├── ai_service/        # LlmRouter (litellm wrapper), chat orchestrator + sub-agents, tool_store (one tool per CRUD op), prompts/
+│   ├── ai_service/        # ChatLiteLLM model, chat orchestrator + sub-agents, tool_store (one tool per CRUD op), prompts/
 │   ├── core/              # config (pydantic-settings), database, security, scheduler, log_module, github (stars/downloads sync)
 │   ├── models/            # SQLAlchemy 2.0 ORM models
 │   └── schemas/           # Pydantic request/response schemas
@@ -230,12 +232,13 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Dev Tracking — projects, investments, adoption snapshots
 - [x] GitHub stars / release-download sync on the scheduler, with a manual refresh endpoint
 - [x] React frontend
-- [x] LLM router with startup health check
+- [x] Provider-agnostic LLM connection with startup health check
 - [x] Chat control of every module (read / create / update, approval-gated delete)
 - [x] Chat attachments: a receipt image or PDF attached in the chat is read by the assistant
 - [ ] **AI "receipt → booked" flow** (flagship demo)
 - [ ] Finance: amounts, vendors, dates and due-date tracking on expenses
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
+- [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders
 - [ ] Purchases: vendors and purchase orders on top of the product catalog
 
