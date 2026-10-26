@@ -120,7 +120,7 @@ cp backend/.env.example backend/.env
 #   SMTP_HOSTNAME / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password)
 #   SUMMARY_SEND_TIME (hour 0-23) / SUMMARY_SEND_FREQ (day|week|month), plus SUMMARY_SEND_WEEKDAY (0-6, Mon=0) for week or SUMMARY_SEND_MONTHDAY (1-31) for month
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
-#   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (chat attachments; default backend/uploads and 10 MB per file)
+#   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (receipts and chat attachments; default backend/uploads and 10 MB per file)
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
 #   ADMIN_DB_CONNECTION can stay as-is — Compose points the backend at the bundled database
 
@@ -157,7 +157,7 @@ and the rest of the ERP keeps working.
 - Postgres credentials are applied when the `pgdata` volume is first created.
   `docker compose down -v` removes the volume — and all data — so the next start
   begins fresh.
-- Backend logs are written to `backend/logs/` and chat attachments to `backend/uploads/` on the host.
+- Backend logs are written to `backend/logs/` and uploaded receipts and chat attachments to `backend/uploads/` on the host (layout in "Where uploads go" below).
 
 ### 3. Pick an LLM
 
@@ -184,6 +184,29 @@ as extracted text and work with any model.
 `host.docker.internal` resolves to the host machine on Docker Desktop (Windows,
 macOS). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the
 `backend` service in `docker-compose.yml`.
+
+### 4. Where uploads go
+
+Receipts booked from the Finance page and files attached in the chat land in the
+same place, `UPLOAD_DIR` (default `backend/uploads/`), laid out as:
+
+```text
+uploads/<user_id>/<attachment_uuid>.<ext>
+```
+
+- `<user_id>` is the user who uploaded the file. The folder proves ownership:
+  only a file from your own folder can be linked when you create an expense.
+- `<attachment_uuid>` is a random id made at upload time. It is **not** the
+  expense id — the file exists before the expense does (upload → AI draft → you
+  confirm → the expense row is created).
+- `<ext>` is `jpg` for every image (PNG and WebP are re-encoded as JPEG, EXIF
+  rotation applied, downscaled to about 1 MP) or `pdf`.
+
+An expense points at its document through the `receipt_path` column, which
+stores that relative path (`1/c25445de-….jpg`); `GET /finance/expense/{id}/receipt`
+serves it back and the ledger shows it. Two gaps to know about: a receipt that
+was read but never booked stays on disk with nothing pointing at it, and
+deleting an expense does not delete its file. There is no cleanup job yet.
 
 ## 📁 Project structure
 
@@ -222,7 +245,7 @@ All routes live under `/api/v1` and, except for login, expect an
 |--------|-----------|
 | `/auth` | `POST /login`, `POST /logout`, `GET /me` |
 | `/hr` | users (employees), departments, attendance, leave requests, paychecks |
-| `/finance` | expenses; `POST /receipt` uploads a receipt or invoice (PNG / JPEG / WebP / PDF, 10 MB) and answers with an AI-read expense draft plus the stored `receipt_path`, nothing is booked until `POST /expense` |
+| `/finance` | expenses; `POST /receipt` uploads a receipt or invoice (PNG / JPEG / WebP / PDF, 10 MB) and answers with an AI-read expense draft plus the stored `receipt_path`, nothing is booked until `POST /expense`; `GET /expense/{id}/receipt` serves the stored file back |
 | `/scm` | products |
 | `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
 | `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision`. `POST /upload` — stores one attachment (PNG / JPEG / WebP / PDF, 10 MB) whose `id` goes into `chatbox` `attachments` |

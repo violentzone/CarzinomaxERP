@@ -8,7 +8,7 @@ from traceback import format_exc
 from uuid import UUID
 
 from fastapi import Depends, APIRouter, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from starlette import status
@@ -18,7 +18,7 @@ from app.core.database import get_db
 from app.core.finance import investment_from_expense
 from app.core.log_module import user_log
 from app.core.receipts import extract_receipt
-from app.core.uploads import UPLOAD_ROOT, attachment_path, load_attachment, save_attachment
+from app.core.uploads import MIME_BY_EXTENSION, UPLOAD_ROOT, attachment_path, load_attachment, save_attachment
 from app.models import DevProject, ExpenseCategory, ExpenseType, Finance, User
 
 finance_router = APIRouter(prefix="/finance", tags=["Finance"])
@@ -77,6 +77,49 @@ async def get_expense(expense_id: UUID, current_user: User = Depends(get_current
     log.info(f'[EXPENSE] Query expense: {expense_data}')
 
     return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_200_OK, media_type='application/json')
+
+
+@finance_router.get("/expense/{expense_id}/receipt")
+async def get_expense_receipt(expense_id: UUID, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Serve the receipt or invoice an expense was booked from, as the stored file (JPEG or PDF) instead of the JSON envelope
+    Args:
+        expense_id: The expense whose receipt to serve
+        current_user: Signed in user; any user with finance access may view the receipt of any expense because the ledger is shared
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        The file with its media type and `Content-Disposition: inline` on success, {'status': 'fail', 'error': error message} otherwise
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('finance', current_user.id, db):
+        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+    log.info(f'[RECEIPT] Query receipt of expense ID: {expense_id}')
+
+    expense = await db.get(Finance, expense_id)
+    if not expense:
+        log.warning(f'[RECEIPT] Expense ID: {expense_id} not found')
+        return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+    if not expense.receipt_path:
+        log.warning(f'[RECEIPT] Expense ID: {expense_id} has no receipt')
+        return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} has no receipt"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+
+    try:
+        # receipt_path is written by create_expense only, from a validated attachment of the caller, so the containment check is belt and braces
+        path = (UPLOAD_ROOT / expense.receipt_path).resolve()
+        media_type = MIME_BY_EXTENSION.get(path.suffix.lstrip('.'))
+        if not path.is_relative_to(UPLOAD_ROOT.resolve()):
+            log.warning(f'[RECEIPT] Receipt path {expense.receipt_path} of expense {expense_id} points outside the upload directory')
+            return JSONResponse({"status": "fail", "error": "Receipt file is missing"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        if not path.is_file() or media_type is None:
+            log.warning(f'[RECEIPT] Receipt file {expense.receipt_path} of expense {expense_id} is missing or has an unknown type')
+            return JSONResponse({"status": "fail", "error": "Receipt file is missing"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
+        log.info(f'[RECEIPT] Serves receipt {expense.receipt_path} of expense {expense_id}')
+        response = FileResponse(path, media_type=media_type, headers={'Content-Disposition': f'inline; filename="receipt-{expense_id}{path.suffix}"'})
+        return response
+    except Exception as err:
+        log.error(f'[RECEIPT] Failed to serve receipt of expense {expense_id}: {format_exc()}')
+        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 class CreateExpense(BaseModel):

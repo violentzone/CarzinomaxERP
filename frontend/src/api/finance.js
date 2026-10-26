@@ -6,7 +6,7 @@
  * and optional vendor, reference, description, category, document / due / paid
  * dates, a dev `project_id` and the `receipt_path` of the document it was booked from.
  */
-import { apiGet, apiPost, apiPut, apiDelete, apiPostForm } from '../lib/api'
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, apiGetBlob } from '../lib/api'
 
 export const EXPENSE_TYPES = ['paycheck', 'petty_cash', 'investment', 'other']
 export const EXPENSE_CATEGORIES = ['cloud', 'software_licenses', 'hardware', 'consulting', 'travel', 'office', 'meals', 'other']
@@ -28,4 +28,6 @@ export const financeApi = {
     form.append('file', file, file.name)
     return apiPostForm('/finance/receipt', form)
   },
+  /** The stored receipt of an expense (JPEG or PDF) as a `Blob`; 404 when the expense has none. */
+  fetchReceipt: (id) => apiGetBlob(`/finance/expense/${id}/receipt`),
 }

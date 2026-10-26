@@ -6,6 +6,7 @@
  *   - failure  → `{ "status": "fail", "error": "message" }` with a 4xx status
  *   - auth     → FastAPI `HTTPException` bodies: `{ "detail": "message" }`
  *   - login    → the raw JWT string as the response body
+ *   - binary   → raw bytes with their media type (a stored receipt), see `apiGetBlob`
  *
  * Every helper here unwraps the envelope (so callers receive `data` directly)
  * and throws an {@link ApiError} on non-2xx responses so callers can branch on
@@ -153,6 +154,18 @@ export async function apiPostStream(path, body, { signal } = {}) {
   })
   if (!res.ok) await parse(res)
   return res
+}
+
+/**
+ * GET a binary resource (a stored receipt) and resolve to its `Blob`. A plain
+ * `<img src>` cannot carry the bearer token, so callers show the blob through an
+ * object URL. Non-2xx responses go through `parse` so ApiError and the 401
+ * broadcast match `apiGet`.
+ */
+export async function apiGetBlob(path) {
+  const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() })
+  if (!res.ok) await parse(res)
+  return res.blob()
 }
 
 /**
