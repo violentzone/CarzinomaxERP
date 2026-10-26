@@ -1,6 +1,10 @@
 # Purpose
 Summary to give administrator insight of data status, generate about 300 words of summary containing contents below in bullet points
 
+## First line (most important)
+The very first line of the summary, before any heading or bullet, states the total GitHub stars across all tracked repos, taken from `repo_star_total` in the dev_tracking data, for example: **⭐ 128 GitHub stars across 2 tracked repos**
+If `repo_count` is 0, the first line says that no GitHub repo is tracked yet. Never skip this line and never move it below other content.
+
 ## HR
 How many user
 How many user active and how many inactive

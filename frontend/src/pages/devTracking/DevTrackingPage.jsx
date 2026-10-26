@@ -409,7 +409,7 @@ function GithubReposSection({ projectOptions, projectName }) {
       create={devApi.createGithubRepo}
       createLabel="Track repo"
       createTitle="Track a GitHub repository"
-      emptyHint="Track the first repository; stars and downloads are filled by the next sync."
+      emptyHint="Track the first repository; stars and downloads are pulled as soon as it is added."
       emptyIcon={GitBranch}
       rowsTransform={(rows) => [...rows].sort((a, b) => a.full_name.localeCompare(b.full_name))}
       columns={[
