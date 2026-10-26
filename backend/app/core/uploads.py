@@ -1,6 +1,6 @@
 """
 Chat attachments: validate and store the files a user attaches in the chatbox, load them back for the orchestrator
-Files live under <UPLOAD_DIR>/<user_id>/<uuid>.<ext>; the uuid is the attachment id and the directory proves ownership. No table, no retention.
+Files live under <UPLOAD_DIR>/<user_id>/<uuid>.<ext>; the uuid is the attachment id and the directory proves ownership to the router (the chat tools resolve by uuid alone). No table, no retention.
 """
 import asyncio
 import re
@@ -131,11 +131,11 @@ async def save_attachment(user_id: int, upload: UploadFile) -> Attachment:
     return attachment
 
 
-def attachment_path(user_id: int, attachment_id: str) -> Path:
+def attachment_path(user_id: int | None, attachment_id: str) -> Path:
     """
-    Resolve an attachment id to its file inside the caller's directory only
+    Resolve an attachment id to its file, inside the caller's directory only or, for the chat tools that do not know the caller, whoever uploaded it
     Args:
-        user_id: Caller, another user's attachment resolves to nothing
+        user_id: Caller, another user's attachment resolves to nothing; None searches every user's directory (the uuid4 is known only to its uploader)
         attachment_id: Id returned by `POST /chatbot/upload`
 
     Returns:
@@ -146,7 +146,8 @@ def attachment_path(user_id: int, attachment_id: str) -> Path:
     """
     if not ATTACHMENT_ID_RE.fullmatch(attachment_id):
         raise ValueError(f'Unknown attachment {attachment_id}')
-    matches = list((UPLOAD_ROOT / str(user_id)).glob(f'{attachment_id}.*'))
+    owner_dir = str(user_id) if user_id is not None else '*'
+    matches = list(UPLOAD_ROOT.glob(f'{owner_dir}/{attachment_id}.*'))
     if not matches:
         raise ValueError(f'Unknown attachment {attachment_id}')
     return matches[0]

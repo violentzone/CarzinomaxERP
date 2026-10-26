@@ -28,7 +28,7 @@ export const devApi = {
   updateDownload: (id, payload) => apiPut(`/dev_tracking/download/${id}`, payload),
   deleteDownload: (id) => apiDelete(`/dev_tracking/download/${id}`),
 
-  // Tracked GitHub repos; stars / downloads are filled by the backend sync, never sent by the client
+  // Tracked GitHub repos; stars / downloads are filled by the backend (on create and by the scheduled sync), never sent by the client
   listGithubRepos: () => apiGet('/dev_tracking/github_repo_list'),
   createGithubRepo: (payload) => apiPost('/dev_tracking/github_repo', payload),
 }

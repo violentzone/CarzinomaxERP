@@ -105,7 +105,7 @@ async def get_expense_receipt(expense_id: UUID, current_user: User = Depends(get
         return JSONResponse({"status": "fail", "error": f"Expense with id {expense_id} has no receipt"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
     try:
-        # receipt_path is written by create_expense only, from a validated attachment of the caller, so the containment check is belt and braces
+        # receipt_path is only ever a stored attachment resolved under UPLOAD_ROOT (REST: the caller's own, chat tool: any uploader's by uuid), so the containment check is belt and braces
         path = (UPLOAD_ROOT / expense.receipt_path).resolve()
         media_type = MIME_BY_EXTENSION.get(path.suffix.lstrip('.'))
         if not path.is_relative_to(UPLOAD_ROOT.resolve()):

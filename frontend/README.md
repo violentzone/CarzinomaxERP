@@ -104,8 +104,9 @@ token) clears the session and returns you to the login screen.
   project per UTC day, totals over the project's tracked repos); hand edits to
   those rows are overwritten at the next sync. The **GitHub repos** tab lists
   the repositories that sync follows (latest stars, downloads, last sync and
-  error) and adds new ones by `owner/name` or URL; a new repo shows dashes
-  until the next sync. Removing or renaming a repo and "sync now" are API-only.
+  error) and adds new ones by `owner/name` or URL; the backend pulls the numbers
+  on create, so a new repo shows dashes only when the pull failed (the error
+  column says why) and the next scheduled sync retries it. Removing or renaming a repo and "sync now" are API-only.
 - **People & Payroll** — paychecks recompute `net_pay` (base + allowances −
   deductions) on save unless you type a value. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a

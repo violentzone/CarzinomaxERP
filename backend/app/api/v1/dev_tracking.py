@@ -1,6 +1,6 @@
 """
 Dev tracking module, Query, add, remove and update DevProject, DevInvestment, ProjectDownload and GithubRepo
-(tracked repos whose stars / release downloads are refreshed by the scheduler and POST /github_sync)
+(tracked repos whose stars / release downloads are pulled when added and refreshed by the scheduler and POST /github_sync)
 """
 from datetime import date as date_type
 from decimal import Decimal
@@ -686,7 +686,7 @@ class UpdateGithubRepo(BaseModel):
 @dev_tracking_router.post("/github_repo")
 async def create_github_repo(new_repo: CreateGithubRepo, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
-    Track a GitHub repo for a dev project. Stars and downloads are filled by the next sync.
+    Track a GitHub repo for a dev project and pull its stars and downloads right away; a failed pull keeps the repo tracked with the reason in `last_error` and the next scheduled sync retries it
     Args:
         new_repo: Project ID and repository "owner/name" (or github.com URL)
         current_user: Signed in user
@@ -716,6 +716,14 @@ async def create_github_repo(new_repo: CreateGithubRepo, current_user: User = De
         repo = GithubRepo(project_id=new_repo.project_id, full_name=full_name)
         db.add(repo)
         await db.commit()
+        await db.refresh(repo)
+        # The row is committed first so a GitHub outage still leaves the repo tracked; the sync sets counts or `last_error` and writes today's snapshot
+        try:
+            await sync_github_repos(db, repo.id)
+        except Exception:
+            # The row is already committed, a rollback only clears a failed transaction so the refresh below can reload it
+            await db.rollback()
+            log.warning(f'[GITHUB_REPO] Initial sync of {full_name} failed, the scheduled sync will retry: {format_exc()}')
         await db.refresh(repo)
         repo_data = repo.to_dict()
         log.info(f'[GITHUB_REPO] GitHub repo tracked: {repo_data}')

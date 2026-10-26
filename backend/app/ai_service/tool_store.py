@@ -10,6 +10,7 @@ from app.core.database import SyncSessionLocal
 from app.core.finance import investment_from_expense
 from app.core.github import fetch_repo_stats_once, parse_repo_full_name
 from app.core.security import get_password_hash
+from app.core.uploads import UPLOAD_ROOT, attachment_path
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject, GithubRepo, ProjectDownload
 from app.models.finance import ExpenseCategory, ExpenseType, Finance
@@ -232,6 +233,7 @@ class ExpenseDetail(BaseModel):
     due_date: date_type | None
     paid_date: date_type | None
     project_id: int | None
+    receipt_path: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -298,6 +300,7 @@ def create_expense(
     due_date: date_type | None = None,
     paid_date: date_type | None = None,
     project_id: int | None = None,
+    attachment_id: str | None = None,
 ) -> ExpenseDetail:
     """
     Creates a new expense record into database table "finance"; an investment linked to a project is mirrored as a dev investment
@@ -312,17 +315,23 @@ def create_expense(
         due_date: Payment due date, None if none
         paid_date: Date the expense was paid, None if unpaid
         project_id: Dev project the expense belongs to, must exist, None if none
+        attachment_id: `id` of the attached receipt or invoice the expense is booked from, stored as the expense's receipt, None if none
 
     Returns:
         The created expense record
+
+    Raises:
+        ValueError: Unknown `project_id` or `attachment_id`
     """
+    # Resolved before the session opens; tools do not know the caller, the uuid4 is known only to its uploader, so the file is linked whoever stored it
+    receipt_path = attachment_path(None, attachment_id).relative_to(UPLOAD_ROOT).as_posix() if attachment_id else None
     with SyncSessionLocal() as session:
         if project_id is not None:
             project = session.get(DevProject, project_id)
             if project is None:
                 raise ValueError(f'Dev project with id {project_id} not found')
         # The date is set here because the investment mirror reads it before the flush
-        expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id)
+        expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id, receipt_path=receipt_path)
         session.add(expense)
         investment = investment_from_expense(expense)
         if investment:
