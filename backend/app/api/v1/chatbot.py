@@ -23,8 +23,16 @@ MAX_ATTACHMENTS = 5  # files per chat turn, the frontend enforces the same numbe
 
 
 @chatbot_router.post('/', status_code=status.HTTP_200_OK)
-async def health_check(user_id: int):
-    log = user_log(user_id)
+async def health_check(current_user: User = Depends(get_current_user)):
+    """
+    Ping the LLM on demand, the same best-effort check as startup
+    Args:
+        current_user: Any signed-in user may ask
+
+    Returns:
+        Response body: {'live': True, 'message': ''} or 500 with {'live': False, 'message': hint}
+    """
+    log = user_log(current_user.id)
     start_time = datetime.now()
     log.info(f'[CHATBOT] {start_time.strftime('%Y-%m-%d %H:%M:%S')} checks chatbot health')
     try:
