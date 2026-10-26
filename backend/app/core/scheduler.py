@@ -4,7 +4,7 @@ Background jobs, one AsyncIOScheduler per process (single worker only), started 
 import asyncio
 import json
 import smtplib
-from datetime import date
+from datetime import date, timedelta
 from email.message import EmailMessage
 from traceback import format_exc
 from sqlalchemy import select, func, distinct
@@ -92,6 +92,29 @@ async def query_dev_tracking_summary(session: AsyncSession) -> dict[str, object]
     summary = {'project_count': project_count, 'projects_without_repo': projects_without_repo, 'investment_total': float(investment_total), 'investment_this_month': float(investment_this_month), 'investment_per_category': investment_per_category, 'repo_count': repo_count, 'repo_star_total': repo_star_total, 'repo_download_total': repo_download_total, 'last_github_sync': last_github_sync, 'repos_with_sync_error': repos_with_sync_error, 'snapshot_count': snapshot_count, 'newest_snapshot_date': newest_snapshot_date}
     return summary
 
+async def query_finance_summary(session: AsyncSession) -> dict[str, object]:
+    """
+    Aggregate the Finance figures the summary prompt asks for, in SQL, so the payload stays small as expenses accumulate
+    Args:
+        session: Open async session, the caller owns it
+
+    Returns:
+        Dict of counts, totals and dates over every expense, JSON-ready except for the `date` / `datetime` values
+    """
+    today = date.today()
+    month_start = today.replace(day=1)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    expense = finance.Finance  # alias, every statement below reads this table
+    expense_stmt = select(func.count(expense.id), func.coalesce(func.sum(expense.amount), 0), func.coalesce(func.sum(expense.amount).filter(expense.expense_date >= month_start), 0), func.coalesce(func.sum(expense.amount).filter(expense.expense_date >= last_month_start, expense.expense_date < month_start), 0), func.coalesce(func.max(expense.amount), 0), func.max(expense.created_at))
+    expense_count, expense_total, expense_this_month, expense_last_month, largest_expense, newest_expense_created_at = (await session.execute(expense_stmt)).one()
+    type_stmt = select(expense.expense_type, func.sum(expense.amount)).group_by(expense.expense_type)
+    expense_per_type = {expense_type.value: float(total) for expense_type, total in (await session.execute(type_stmt)).all()}
+    # Unpaid = no paid_date; overdue = unpaid with a due date before today
+    unpaid_stmt = select(func.count(expense.id).filter(expense.paid_date.is_(None)), func.coalesce(func.sum(expense.amount).filter(expense.paid_date.is_(None)), 0), func.count(expense.id).filter(expense.paid_date.is_(None), expense.due_date < today), func.coalesce(func.sum(expense.amount).filter(expense.paid_date.is_(None), expense.due_date < today), 0), func.min(expense.due_date).filter(expense.paid_date.is_(None), expense.due_date >= today))
+    unpaid_expenses, unpaid_total, overdue_expenses, overdue_total, next_due_date = (await session.execute(unpaid_stmt)).one()
+    summary = {'expense_count': expense_count, 'expense_total': float(expense_total), 'expense_this_month': float(expense_this_month), 'expense_last_month': float(expense_last_month), 'expense_per_type': expense_per_type, 'largest_expense': float(largest_expense), 'newest_expense_created_at': newest_expense_created_at, 'unpaid_expenses': unpaid_expenses, 'unpaid_total': float(unpaid_total), 'overdue_expenses': overdue_expenses, 'overdue_total': float(overdue_total), 'next_due_date': next_due_date}
+    return summary
+
 async def generate_summary() -> str:
     """
     Generate the summary of the data status of Carzinomax Dev
@@ -104,15 +127,14 @@ async def generate_summary() -> str:
             log.info('[SUMMARY] Querying HR')
             hr_summary = await query_hr_summary(session)
             log.info('[SUMMARY] Querying Finance')
-            finance_data_stmt = select(finance.Finance)
-            finance_data = (await session.execute(finance_data_stmt)).scalars().all()
+            finance_summary = await query_finance_summary(session)
             log.info('[SUMMARY] Querying Dev Tracking')
             dev_summary = await query_dev_tracking_summary(session)
             scm_data_stmt = select(scm.Product)
             scm_data = (await session.execute(scm_data_stmt)).scalars().all()
 
         # Reformat and send to LLM for summary
-        datas = {'hr data': hr_summary, 'finance data': [d.to_dict() for d in finance_data], 'dev_tracking data': dev_summary, 'scm data': [d.to_dict() for d in scm_data]}
+        datas = {'hr data': hr_summary, 'finance data': finance_summary, 'dev_tracking data': dev_summary, 'scm data': [d.to_dict() for d in scm_data]}
     except Exception as e:
         log.error(f"[SUMMARY] generate_summary failed: {e}")
         raise ValueError(f"Unable to query data from database")

@@ -15,6 +15,10 @@ class DevProject(Base, TimestampMixin):
     project_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
+# Values of DevInvestment.category (keep the Literals in tool_store.py and dev_helper_prompt.md in step); an expense category outside this list is mirrored as "other"
+DEV_INVESTMENT_CATEGORIES = ('cloud', 'software_licenses', 'hardware', 'consulting', 'other')
+
+
 class DevInvestment(Base, TimestampMixin):
     __tablename__ = "dev_investments"
 
@@ -23,7 +27,7 @@ class DevInvestment(Base, TimestampMixin):
     project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     vendor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # AWS, GCP, Vercel, etc.
-    category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting
+    category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting, other
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 

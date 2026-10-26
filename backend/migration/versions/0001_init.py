@@ -80,8 +80,18 @@ def upgrade() -> None:
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('expense_type', sa.Enum('paycheck', 'petty_cash', 'investment', 'other', name='expensetype', native_enum=False, create_constraint=True, length=32), nullable=False),
     sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('vendor', sa.String(length=255), nullable=True),
+    sa.Column('reference', sa.String(length=100), nullable=True),
+    sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('category', sa.String(length=100), nullable=True),
+    sa.Column('expense_date', sa.Date(), nullable=False),
+    sa.Column('due_date', sa.Date(), nullable=True),
+    sa.Column('paid_date', sa.Date(), nullable=True),
+    sa.Column('project_id', sa.Integer(), nullable=True),
+    sa.Column('receipt_path', sa.String(length=255), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['project_id'], ['dev_projects.project_id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_finance_id'), 'finance', ['id'], unique=False)

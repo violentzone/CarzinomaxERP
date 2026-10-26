@@ -13,9 +13,10 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts'
-import { HandCoins, Cloud, Boxes, BookOpen, Lock, TrendingDown } from 'lucide-react'
+import { HandCoins, Cloud, Boxes, BookOpen, Lock, TrendingDown, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { financeApi } from '../../api/finance'
+import { isOverdue } from '../../lib/expenses'
 import { hrApi } from '../../api/hr'
 import { devApi } from '../../api/devTracking'
 import { scmApi } from '../../api/scm'
@@ -84,6 +85,9 @@ export default function FinanceOverview() {
   const payrollDraft = (paychecks || []).filter((p) => p.status !== 'paid').reduce((s, p) => s + num(p.net_pay), 0)
   const devSpend = (investments || []).reduce((s, i) => s + num(i.amount), 0)
   const catalogCost = (products || []).reduce((s, p) => s + num(p.cost), 0)
+  const ledgerTotal = (expenses || []).reduce((s, e) => s + num(e.amount), 0)
+  const unpaid = (expenses || []).filter((e) => !e.paid_date)
+  const overdue = unpaid.filter(isOverdue)
 
   // Monthly outflow: payroll (by payment date) + investments (by date), last 12 months with data.
   const months = {}
@@ -127,7 +131,8 @@ export default function FinanceOverview() {
     paychecks && { label: 'Payroll paid', value: payrollPaid, format: compactCurrency, icon: HandCoins, hint: payrollDraft ? `${currency(payrollDraft)} still in draft` : `${paychecks.length} paychecks` },
     investments && { label: 'Project investments', value: devSpend, format: compactCurrency, icon: Cloud, hint: `${investments.length} entries` },
     products && { label: 'Purchase catalog cost', value: catalogCost, format: compactCurrency, icon: Boxes, hint: `${products.length} items` },
-    expenses && { label: 'Ledger entries', value: expenses.length, icon: BookOpen, hint: 'typed expense records' },
+    expenses && { label: 'Expense ledger', value: ledgerTotal, format: compactCurrency, icon: BookOpen, hint: `${expenses.length} expenses booked` },
+    expenses && { label: 'Unpaid bills', value: unpaid.reduce((s, e) => s + num(e.amount), 0), format: compactCurrency, icon: AlertTriangle, hint: overdue.length ? `${overdue.length} overdue · ${currency(overdue.reduce((s, e) => s + num(e.amount), 0))}` : `${unpaid.length} open, none overdue` },
   ].filter(Boolean)
 
   const locked = [

@@ -1,6 +1,6 @@
 from app.models.base import Base, TimestampMixin
 from app.models.auth import User
-from app.models.finance import ExpenseType, Finance
+from app.models.finance import ExpenseCategory, ExpenseType, Finance
 from app.models.scm import (
     Product,
 )
@@ -21,6 +21,7 @@ __all__ = [
     "Base",
     "TimestampMixin",
     "User",
+    "ExpenseCategory",
     "ExpenseType",
     "Finance",
     "Product",

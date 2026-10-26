@@ -31,9 +31,14 @@ Carzinomax DEV flips it: the ERP does the paperwork **for** you. You hand it a
 document; the AI does the busywork and asks you to confirm. The goal is an ERP
 that a two-person company can actually run without hiring a bookkeeper.
 
-## The flagship: "Receipt → Booked" 🔜
+## The flagship: "Receipt → Booked" 🚧
 
-The wedge we're building first:
+The wedge we're building first. The first half works today: on the Finance page,
+**Book from receipt** uploads a receipt or invoice, the AI reads it into a draft
+(vendor, invoice number, total, dates, type, category, project, paid or not) and
+the expense form opens prefilled for you to confirm. The same booking works in the
+chat by attaching the document and saying "book it". Forwarding by email and
+scheduling the payment are still to come.
 
 ```
 You:  *forwards a $340 AWS invoice*
@@ -47,26 +52,27 @@ AI:   Booked it. Here's what I did:
 ```
 
 One forwarded email replaces five minutes of manual data entry — and it lands
-as a proper record in your books, not a note in a spreadsheet.
+as a proper record in your books, not a note in a spreadsheet. Today the
+document is uploaded rather than forwarded, and the AI proposes while you confirm.
 
 ## ✅ What works today
 
 The ERP is sized for a small unit and currently does four things: tracks the
 software you're building and what it costs, pays the people building it,
-classifies the unit's spending, and keeps a product catalog. The AI layer is
-wired in but not yet driving any feature.
+classifies the unit's spending, and keeps a product catalog. The AI layer reads
+receipts into expense drafts and runs the chat assistant.
 
 | Area | Status | Notes |
 |------|--------|-------|
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
 | **Dev Tracking** | ✅ Working | Projects, money invested per project (cloud, licences, hardware, consulting), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
-| **Finance** | 🚧 Minimal | Typed expense ledger (paycheck / petty cash / investment / other). The Finance overview rolls payroll, project investments and purchases into one view |
+| **Finance** | ✅ Working | Expense ledger: type (paycheck / petty cash / investment / other), amount, vendor, invoice number, category, document date, due date, paid date, optional dev project link and the receipt it was booked from. Unpaid and overdue bills are shown on the ledger and the overview. An `investment` linked to a project is mirrored into Dev Tracking's investments (edits and deletes are not synced). The overview still rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
-| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF can be attached to a message and the assistant reads it (the configured model must accept image input, see "Pick an LLM"); booking an expense from it is still planned |
-| **AI back office** | 🔜 In progress | The "receipt → booked" flow above — the whole point. Not built yet |
+| **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
+| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat. Email forwarding and payment scheduling are not built yet |
 | **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
@@ -114,7 +120,7 @@ cp backend/.env.example backend/.env
 #   SMTP_HOSTNAME / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password)
 #   SUMMARY_SEND_TIME (hour 0-23) / SUMMARY_SEND_FREQ (day|week|month), plus SUMMARY_SEND_WEEKDAY (0-6, Mon=0) for week or SUMMARY_SEND_MONTHDAY (1-31) for month
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
-#   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (chat attachments; default backend/uploads and 10 MB per file)
+#   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (receipts and chat attachments; default backend/uploads and 10 MB per file)
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
 #   ADMIN_DB_CONNECTION can stay as-is — Compose points the backend at the bundled database
 
@@ -151,7 +157,7 @@ and the rest of the ERP keeps working.
 - Postgres credentials are applied when the `pgdata` volume is first created.
   `docker compose down -v` removes the volume — and all data — so the next start
   begins fresh.
-- Backend logs are written to `backend/logs/` and chat attachments to `backend/uploads/` on the host.
+- Backend logs are written to `backend/logs/` and uploaded receipts and chat attachments to `backend/uploads/` on the host (layout in "Where uploads go" below).
 
 ### 3. Pick an LLM
 
@@ -178,6 +184,29 @@ as extracted text and work with any model.
 `host.docker.internal` resolves to the host machine on Docker Desktop (Windows,
 macOS). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the
 `backend` service in `docker-compose.yml`.
+
+### 4. Where uploads go
+
+Receipts booked from the Finance page and files attached in the chat land in the
+same place, `UPLOAD_DIR` (default `backend/uploads/`), laid out as:
+
+```text
+uploads/<user_id>/<attachment_uuid>.<ext>
+```
+
+- `<user_id>` is the user who uploaded the file. The folder proves ownership:
+  only a file from your own folder can be linked when you create an expense.
+- `<attachment_uuid>` is a random id made at upload time. It is **not** the
+  expense id — the file exists before the expense does (upload → AI draft → you
+  confirm → the expense row is created).
+- `<ext>` is `jpg` for every image (PNG and WebP are re-encoded as JPEG, EXIF
+  rotation applied, downscaled to about 1 MP) or `pdf`.
+
+An expense points at its document through the `receipt_path` column, which
+stores that relative path (`1/c25445de-….jpg`); `GET /finance/expense/{id}/receipt`
+serves it back and the ledger shows it. Two gaps to know about: a receipt that
+was read but never booked stays on disk with nothing pointing at it, and
+deleting an expense does not delete its file. There is no cleanup job yet.
 
 ## 📁 Project structure
 
@@ -216,7 +245,7 @@ All routes live under `/api/v1` and, except for login, expect an
 |--------|-----------|
 | `/auth` | `POST /login`, `POST /logout`, `GET /me` |
 | `/hr` | users (employees), departments, attendance, leave requests, paychecks |
-| `/finance` | expenses |
+| `/finance` | expenses; `POST /receipt` uploads a receipt or invoice (PNG / JPEG / WebP / PDF, 10 MB) and answers with an AI-read expense draft plus the stored `receipt_path`, nothing is booked until `POST /expense`; `GET /expense/{id}/receipt` serves the stored file back |
 | `/scm` | products |
 | `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
 | `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision`. `POST /upload` — stores one attachment (PNG / JPEG / WebP / PDF, 10 MB) whose `id` goes into `chatbox` `attachments` |
@@ -235,8 +264,9 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Provider-agnostic LLM connection with startup health check
 - [x] Chat control of every module (read / create / update, approval-gated delete)
 - [x] Chat attachments: a receipt image or PDF attached in the chat is read by the assistant
-- [ ] **AI "receipt → booked" flow** (flagship demo)
-- [ ] Finance: amounts, vendors, dates and due-date tracking on expenses
+- [x] Finance: amounts, vendors, invoice numbers, categories, document / due / paid dates, project link
+- [x] **AI "receipt → booked" flow**: upload a receipt, confirm the AI draft, booked (Finance page and chat)
+- [ ] Receipt → booked by forwarding an email; scheduling the payment
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
 - [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders

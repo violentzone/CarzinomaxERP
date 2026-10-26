@@ -7,11 +7,12 @@ from typing import Literal
 from uuid import UUID
 
 from app.core.database import SyncSessionLocal
+from app.core.finance import investment_from_expense
 from app.core.github import fetch_repo_stats_once, parse_repo_full_name
 from app.core.security import get_password_hash
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject, GithubRepo, ProjectDownload
-from app.models.finance import ExpenseType, Finance
+from app.models.finance import ExpenseCategory, ExpenseType, Finance
 from app.models.hr import AttendanceLog, Department, LeaveRequest, Paycheck
 from app.models.scm import Product
 
@@ -223,6 +224,14 @@ class ExpenseDetail(BaseModel):
     id: UUID
     expense_type: ExpenseType
     amount: float
+    vendor: str | None
+    reference: str | None
+    description: str | None
+    category: ExpenseCategory | None
+    expense_date: date_type
+    due_date: date_type | None
+    paid_date: date_type | None
+    project_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -232,27 +241,39 @@ class GetExpensesOutput(BaseModel):
 
 @tool
 def get_expenses(
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
     expense_type: Literal["paycheck", "petty_cash", "investment", "other"] | None = None,
+    vendor: str | None = None,
+    project_id: int | None = None,
+    unpaid_only: bool | None = None,
 ) -> GetExpensesOutput | None:
     """
     Gets expenses data from database table "finance", filtered by parameters that is not None
     Args:
-        start_date: Start period to query expenses (inclusive, by created_at), None if not filter by start date
-        end_date: End period to query expenses (inclusive, by created_at), None if not filter by end date
+        start_date: Start period to query expenses (inclusive, by expense_date), None if not filter by start date
+        end_date: End period to query expenses (inclusive, by expense_date), None if not filter by end date
         expense_type: Specify which type of expenses to filter by, None if not filter by type
+        vendor: Vendor of the expenses (case-insensitive, contains, e.g. "amazon" matches "Amazon Web Services"), None if not filter by vendor
+        project_id: Dev project the expenses are linked to, None if not filter by project
+        unpaid_only: True to return only expenses without a paid_date, None or False for all
 
     Returns:
         Expenses data, each expense listed in `GetExpensesOutput.expense_detail` with summed amount in `total`, None if no expenses found with filter given
     """
     stmt = select(Finance)
     if start_date is not None:
-        stmt = stmt.where(Finance.created_at >= start_date)
+        stmt = stmt.where(Finance.expense_date >= start_date)
     if end_date is not None:
-        stmt = stmt.where(Finance.created_at <= end_date)
+        stmt = stmt.where(Finance.expense_date <= end_date)
     if expense_type is not None:
         stmt = stmt.where(Finance.expense_type == ExpenseType(expense_type))
+    if vendor is not None:
+        stmt = stmt.where(Finance.vendor.ilike(f'%{vendor}%'))
+    if project_id is not None:
+        stmt = stmt.where(Finance.project_id == project_id)
+    if unpaid_only:
+        stmt = stmt.where(Finance.paid_date.is_(None))
 
     with SyncSessionLocal() as session:
         expenses = (session.execute(stmt)).scalars().all()
@@ -269,20 +290,43 @@ def get_expenses(
 def create_expense(
     expense_type: Literal["paycheck", "petty_cash", "investment", "other"],
     amount: float,
+    vendor: str | None = None,
+    reference: str | None = None,
+    description: str | None = None,
+    category: ExpenseCategory | None = None,
+    expense_date: date_type | None = None,
+    due_date: date_type | None = None,
+    paid_date: date_type | None = None,
+    project_id: int | None = None,
 ) -> ExpenseDetail:
     """
-    Creates a new expense record into database table "finance"
+    Creates a new expense record into database table "finance"; an investment linked to a project is mirrored as a dev investment
     Args:
         expense_type: Type of the expense to create
         amount: Amount of the expense to create
+        vendor: Who was paid (e.g. AWS), None if not known
+        reference: Invoice or receipt number, None if not known
+        description: What was bought, None if not given
+        category: What the money went on (cloud, software_licenses, hardware, consulting, travel, office, meals, other), None if not known
+        expense_date: Date on the document, None for today
+        due_date: Payment due date, None if none
+        paid_date: Date the expense was paid, None if unpaid
+        project_id: Dev project the expense belongs to, must exist, None if none
 
     Returns:
         The created expense record
     """
-    expense = Finance(expense_type=ExpenseType(expense_type), amount=amount)
-
     with SyncSessionLocal() as session:
+        if project_id is not None:
+            project = session.get(DevProject, project_id)
+            if project is None:
+                raise ValueError(f'Dev project with id {project_id} not found')
+        # The date is set here because the investment mirror reads it before the flush
+        expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id)
         session.add(expense)
+        investment = investment_from_expense(expense)
+        if investment:
+            session.add(investment)
         session.commit()
         session.refresh(expense)
 
@@ -293,13 +337,29 @@ def update_expense(
     expense_id: UUID,
     expense_type: Literal["paycheck", "petty_cash", "investment", "other"] | None = None,
     amount: float | None = None,
+    vendor: str | None = None,
+    reference: str | None = None,
+    description: str | None = None,
+    category: ExpenseCategory | None = None,
+    expense_date: date_type | None = None,
+    due_date: date_type | None = None,
+    paid_date: date_type | None = None,
+    project_id: int | None = None,
 ) -> ExpenseDetail:
     """
-    Updates an existing expense record in database table "finance", only fields that is not None are changed
+    Updates an existing expense record in database table "finance", only fields that is not None are changed; a mirrored dev investment is not updated
     Args:
         expense_id: UUID of the expense to update
         expense_type: New type of the expense, None if not change
         amount: New amount of the expense, None if not change
+        vendor: New vendor, None if not change
+        reference: New invoice or receipt number, None if not change
+        description: New description, None if not change
+        category: New category, None if not change
+        expense_date: New document date, None if not change
+        due_date: New payment due date, None if not change
+        paid_date: Date the expense was paid (marks it paid), None if not change
+        project_id: New dev project, must exist, None if not change
 
     Returns:
         The updated expense record
@@ -308,10 +368,29 @@ def update_expense(
         expense = session.get(Finance, expense_id)
         if expense is None:
             raise ValueError(f'Expense with id {expense_id} not found')
+        if project_id is not None:
+            project = session.get(DevProject, project_id)
+            if project is None:
+                raise ValueError(f'Dev project with id {project_id} not found')
+            expense.project_id = project_id
         if expense_type is not None:
             expense.expense_type = ExpenseType(expense_type)
         if amount is not None:
             expense.amount = amount
+        if vendor is not None:
+            expense.vendor = vendor
+        if reference is not None:
+            expense.reference = reference
+        if description is not None:
+            expense.description = description
+        if category is not None:
+            expense.category = category
+        if expense_date is not None:
+            expense.expense_date = expense_date
+        if due_date is not None:
+            expense.due_date = due_date
+        if paid_date is not None:
+            expense.paid_date = paid_date
         session.commit()
         session.refresh(expense)
 
@@ -653,7 +732,7 @@ def create_dev_investment(
     project_id: int,
     date: date_type,
     amount: float,
-    category: Literal["cloud", "software_licenses", "hardware", "consulting"] = "cloud",
+    category: Literal["cloud", "software_licenses", "hardware", "consulting", "other"] = "cloud",
     vendor: str | None = None,
     description: str | None = None,
 ) -> DevInvestmentDetail:
@@ -695,7 +774,7 @@ def update_dev_investment(
     project_id: int | None = None,
     date: date_type | None = None,
     amount: float | None = None,
-    category: Literal["cloud", "software_licenses", "hardware", "consulting"] | None = None,
+    category: Literal["cloud", "software_licenses", "hardware", "consulting", "other"] | None = None,
     vendor: str | None = None,
     description: str | None = None,
 ) -> DevInvestmentDetail:

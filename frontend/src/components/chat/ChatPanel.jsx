@@ -5,15 +5,16 @@ import { FileText, MessageSquarePlus, Paperclip, Send, ShieldAlert, Sparkles, X 
 import { backdropVariants, drawerVariants } from '../../lib/motion'
 import { useChat } from '../../lib/useChat'
 import { fileSize } from '../../lib/format'
+import { UPLOAD_ACCEPT, UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES } from '../../lib/uploads'
 import { useToast } from '../../context/ToastContext'
 import Button from '../ui/Button'
 import Spinner from '../ui/Spinner'
 
-/** Attachment limits; the backend (`POST /chatbot/upload`, `MAX_ATTACHMENTS`) enforces the same values. */
-const ACCEPT = 'image/png,image/jpeg,image/webp,application/pdf'
+/** Attachment limits shared with the Finance receipt upload (`lib/uploads.js`). */
+const ACCEPT = UPLOAD_ACCEPT
 const ACCEPTED_TYPES = new Set(ACCEPT.split(','))
-const MAX_FILES = 5
-const MAX_BYTES = 10 * 1024 * 1024
+const MAX_FILES = UPLOAD_MAX_FILES
+const MAX_BYTES = UPLOAD_MAX_BYTES
 
 /**
  * Right-hand slide-over chat drawer. The component stays mounted so the

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, AlertCircle, Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, AlertCircle, Pencil, Trash2, RefreshCw, Sparkles } from 'lucide-react'
 import { useList } from '../lib/useList'
 import { useToast } from '../context/ToastContext'
 import Table from './ui/Table'
@@ -33,7 +33,9 @@ import { SchemaForm, initialValues, editValues, buildPayload } from './SchemaFor
  *  - rowActions: (row, helpers) => node   extra per-row actions, rendered
  *    before edit/delete. helpers = { reload, toast }
  *  - emptyHint, emptyIcon
- *  - toolbarExtra: node rendered on the left of the toolbar (e.g. filters)
+ *  - toolbarExtra: node rendered on the left of the toolbar (e.g. filters), or a
+ *    function of { reload, toast, rows, openCreate }; `openCreate(values, note)`
+ *    opens the create modal prefilled with `values` and `note` shown above the form
  *  - rowsTransform: optional transform of fetched rows (filter/sort/enrich)
  *  - summary: (rows) => node  rendered above the table (stat tiles, charts)
  *  - modalSize: 'sm' | 'md' | 'lg'
@@ -74,21 +76,26 @@ export default function ResourceSection({
   const [saving, setSaving] = useState(false)
   const [pendingRemove, setPendingRemove] = useState(null)
   const [removing, setRemoving] = useState(false)
+  const [createNote, setCreateNote] = useState(null) // remark above a prefilled create form
 
   if (denied) return <AccessDenied module={moduleName} />
 
   const schemaFor = (row) => (typeof fields === 'function' ? fields(row) : fields)
   const activeFields = schemaFor(editing)
 
-  const openModal = () => {
+  const openCreate = (prefill = {}, note = null) => {
     setEditing(null)
-    setValues(initialValues(schemaFor(null)))
+    setValues({ ...initialValues(schemaFor(null)), ...prefill })
+    setCreateNote(note)
     setOpen(true)
   }
+
+  const openModal = () => openCreate()
 
   const openEdit = (row) => {
     setEditing(row)
     setValues(editValues(schemaFor(row), row))
+    setCreateNote(null)
     setOpen(true)
   }
 
@@ -176,7 +183,7 @@ export default function ResourceSection({
           {subtitle && <div className="muted">{subtitle}</div>}
         </div>
         <div className="filter-row">
-          {typeof toolbarExtra === 'function' ? toolbarExtra({ reload, toast, rows }) : toolbarExtra}
+          {typeof toolbarExtra === 'function' ? toolbarExtra({ reload, toast, rows, openCreate }) : toolbarExtra}
           <button type="button" className="icon-btn" onClick={reload} aria-label="Refresh" title="Refresh">
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
           </button>
@@ -238,6 +245,12 @@ export default function ResourceSection({
           }
         >
           <form id="resource-form" onSubmit={submit}>
+            {createNote && (
+              <div className="note-box form-note">
+                <Sparkles size={14} />
+                <span>{createNote}</span>
+              </div>
+            )}
             <SchemaForm
               fields={activeFields}
               values={values}
