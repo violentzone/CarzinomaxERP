@@ -6,7 +6,7 @@ Setup commands, run instructions, the real file layout, and the conventions an a
 
 ## 🧭 What the project is
 
-**Carzinomax DEV** — "the open-source ERP where AI does the data entry." An ERP sized for a small unit (solo founder to a handful of people). The flagship feature being built is the AI "receipt → booked" flow: a forwarded receipt or invoice becomes a categorized expense without manual entry. The upload half of it exists (Finance page "Book from receipt" and the chat, see Finance below); email forwarding does not. Beyond that the ERP is a set of CRUD modules plus an in-app chat assistant that can read, create, update and (with approval) delete records in every module.
+**Carzinomax DEV** — "the open-source ERP where AI does the data entry." An ERP sized for a small unit (solo founder to a handful of people). The flagship feature being built is the AI "receipt → booked" flow: an uploaded receipt or invoice becomes a categorized expense without manual entry. Reading and booking exist (Finance page "Book from receipt" and the chat, see Finance below); scheduling the payment does not. Beyond that the ERP is a set of CRUD modules plus an in-app chat assistant that can read, create, update and (with approval) delete records in every module.
 
 Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earlier version had a general ledger, invoicing, warehouses and role-based RBAC. **None of that exists anymore.** Do not add features that assume it does. Leftovers of the old version still sit in `app/schemas/` (see Known gaps); ignore them.
 

@@ -4,7 +4,7 @@
 
 ### The open-source ERP where AI does the data entry.
 
-Snap a receipt or forward an invoice — the AI creates the bill, categorizes the
+Snap a receipt or upload an invoice — the AI creates the bill, categorizes the
 expense, posts it to your ledger, and schedules the payment. Self-hostable, and
 built for founders who'd rather build than bookkeep.
 
@@ -37,11 +37,11 @@ The wedge we're building first. The first half works today: on the Finance page,
 **Book from receipt** uploads a receipt or invoice, the AI reads it into a draft
 (vendor, invoice number, total, dates, type, category, project, paid or not) and
 the expense form opens prefilled for you to confirm. The same booking works in the
-chat by attaching the document and saying "book it". Forwarding by email and
-scheduling the payment are still to come.
+chat by attaching the document and saying "book it". Scheduling the payment is
+still to come.
 
 ```
-You:  *forwards a $340 AWS invoice*
+You:  *uploads a $340 AWS invoice*
 
 AI:   Booked it. Here's what I did:
       • Created expense       INV-AWS-0725  ·  $340.00
@@ -51,9 +51,9 @@ AI:   Booked it. Here's what I did:
       Want me to schedule the payment for the 12th?
 ```
 
-One forwarded email replaces five minutes of manual data entry — and it lands
-as a proper record in your books, not a note in a spreadsheet. Today the
-document is uploaded rather than forwarded, and the AI proposes while you confirm.
+One upload replaces five minutes of manual data entry — and it lands as a
+proper record in your books, not a note in a spreadsheet. Today the AI proposes
+while you confirm.
 
 ## ✅ What works today
 
@@ -72,7 +72,7 @@ receipts into expense drafts and runs the chat assistant.
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
-| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat. Email forwarding and payment scheduling are not built yet |
+| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat. Payment scheduling is not built yet |
 | **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
@@ -266,7 +266,7 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Chat attachments: a receipt image or PDF attached in the chat is read by the assistant
 - [x] Finance: amounts, vendors, invoice numbers, categories, document / due / paid dates, project link
 - [x] **AI "receipt → booked" flow**: upload a receipt, confirm the AI draft, booked (Finance page and chat)
-- [ ] Receipt → booked by forwarding an email; scheduling the payment
+- [ ] Scheduling the payment of a booked expense
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
 - [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders
