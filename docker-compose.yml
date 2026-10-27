@@ -11,7 +11,8 @@
 # backend/.env supplies everything except ADMIN_DB_CONNECTION, which is set
 # below to the `db` service. Ports and DB credentials can be overridden from
 # the shell or a root .env: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
-# DB_PORT, BACKEND_PORT, FRONTEND_PORT.
+# DB_PORT, BACKEND_PORT, FRONTEND_PORT, TZ (IANA name, scheduler hours and log
+# timestamps follow it; the python image defaults to UTC without it).
 #
 # Needs Docker Compose v2.23+ (dockerfile_inline and configs.content).
 
@@ -61,6 +62,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      TZ: ${TZ:-Asia/Taipei}
       ADMIN_DB_CONNECTION: postgresql://${POSTGRES_USER:-carzinomax}:${POSTGRES_PASSWORD:-carzinomax}@db:5432/${POSTGRES_DB:-carzinomax}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
