@@ -13,7 +13,7 @@ from app.core.security import get_password_hash
 from app.core.uploads import UPLOAD_ROOT, attachment_path
 from app.models.auth import User
 from app.models.dev_tracking import DevInvestment, DevProject, GithubRepo, ProjectDownload
-from app.models.finance import ExpenseCategory, ExpenseType, Finance
+from app.models.finance import ExpenseCategory, ExpenseType, Finance, ExpenseStatus
 from app.models.hr import AttendanceLog, Department, LeaveRequest, Paycheck
 from app.models.scm import Product
 
@@ -234,6 +234,7 @@ class ExpenseDetail(BaseModel):
     paid_date: date_type | None
     project_id: int | None
     receipt_path: str | None
+    status: ExpenseStatus
     created_at: datetime
     updated_at: datetime
 
@@ -249,6 +250,7 @@ def get_expenses(
     vendor: str | None = None,
     project_id: int | None = None,
     unpaid_only: bool | None = None,
+    status: Literal["paid", "unpaid", "overdue"] | None = None,
 ) -> GetExpensesOutput | None:
     """
     Gets expenses data from database table "finance", filtered by parameters that is not None
@@ -259,6 +261,7 @@ def get_expenses(
         vendor: Vendor of the expenses (case-insensitive, contains, e.g. "amazon" matches "Amazon Web Services"), None if not filter by vendor
         project_id: Dev project the expenses are linked to, None if not filter by project
         unpaid_only: True to return only expenses without a paid_date, None or False for all
+        status: Payment status to filter by (paid, unpaid, overdue), None if not filter by status
 
     Returns:
         Expenses data, each expense listed in `GetExpensesOutput.expense_detail` with summed amount in `total`, None if no expenses found with filter given
@@ -276,6 +279,8 @@ def get_expenses(
         stmt = stmt.where(Finance.project_id == project_id)
     if unpaid_only:
         stmt = stmt.where(Finance.paid_date.is_(None))
+    if status is not None:
+        stmt = stmt.where(Finance.status == ExpenseStatus(status))
 
     with SyncSessionLocal() as session:
         expenses = (session.execute(stmt)).scalars().all()
@@ -303,7 +308,7 @@ def create_expense(
     attachment_id: str | None = None,
 ) -> ExpenseDetail:
     """
-    Creates a new expense record into database table "finance"; an investment linked to a project is mirrored as a dev investment
+    Creates a new expense record into database table "finance"; `status` is derived from `paid_date` and `due_date`, an investment linked to a project is mirrored as a dev investment
     Args:
         expense_type: Type of the expense to create
         amount: Amount of the expense to create
@@ -332,6 +337,12 @@ def create_expense(
                 raise ValueError(f'Dev project with id {project_id} not found')
         # The date is set here because the investment mirror reads it before the flush
         expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id, receipt_path=receipt_path)
+        if expense.paid_date is not None:
+            expense.status = ExpenseStatus.PAID
+        elif expense.due_date is not None and expense.due_date < date_type.today():
+            expense.status = ExpenseStatus.OVERDUE
+        else:
+            expense.status = ExpenseStatus.UNPAID
         session.add(expense)
         investment = investment_from_expense(expense)
         if investment:
@@ -356,7 +367,7 @@ def update_expense(
     project_id: int | None = None,
 ) -> ExpenseDetail:
     """
-    Updates an existing expense record in database table "finance", only fields that is not None are changed; a mirrored dev investment is not updated
+    Updates an existing expense record in database table "finance", only fields that is not None are changed and `status` is re-derived from the dates; a mirrored dev investment is not updated
     Args:
         expense_id: UUID of the expense to update
         expense_type: New type of the expense, None if not change
@@ -400,6 +411,12 @@ def update_expense(
             expense.due_date = due_date
         if paid_date is not None:
             expense.paid_date = paid_date
+        if expense.paid_date is not None:
+            expense.status = ExpenseStatus.PAID
+        elif expense.due_date is not None and expense.due_date < date_type.today():
+            expense.status = ExpenseStatus.OVERDUE
+        else:
+            expense.status = ExpenseStatus.UNPAID
         session.commit()
         session.refresh(expense)
 

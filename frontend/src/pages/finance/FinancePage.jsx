@@ -14,7 +14,7 @@ import { useList } from '../../lib/useList'
 import { financeApi, EXPENSE_TYPES, EXPENSE_CATEGORIES } from '../../api/finance'
 import { devApi } from '../../api/devTracking'
 import { num, currency, date as fmtDate, shortId, titleize, today, fileSize, BASE_CURRENCY } from '../../lib/format'
-import { isOverdue } from '../../lib/expenses'
+import { isOverdue, isPaid } from '../../lib/expenses'
 import { UPLOAD_ACCEPT, UPLOAD_MAX_BYTES } from '../../lib/uploads'
 import FinanceOverview from './FinanceOverview'
 
@@ -115,7 +115,7 @@ function LedgerSection() {
   }
 
   const summary = (rows) => {
-    const unpaid = rows.filter((r) => !r.paid_date)
+    const unpaid = rows.filter((r) => !isPaid(r))
     const overdue = unpaid.filter(isOverdue)
     const sum = (list) => list.reduce((s, r) => s + num(r.amount), 0)
     const tiles = [
@@ -176,9 +176,9 @@ function LedgerSection() {
           [...rows]
             .filter((r) => !typeFilter || r.expense_type === typeFilter)
             .filter((r) => {
-              if (statusFilter === 'unpaid') return !r.paid_date
+              if (statusFilter === 'unpaid') return !isPaid(r)
               if (statusFilter === 'overdue') return isOverdue(r)
-              if (statusFilter === 'paid') return Boolean(r.paid_date)
+              if (statusFilter === 'paid') return isPaid(r)
               return true
             })
             .sort((a, b) => b.expense_date.localeCompare(a.expense_date) || new Date(b.created_at) - new Date(a.created_at))
@@ -248,7 +248,7 @@ function LedgerSection() {
             header: 'Due',
             render: (r) => (isOverdue(r) ? <Badge status="overdue">{fmtDate(r.due_date)}</Badge> : fmtDate(r.due_date)),
           },
-          { key: 'paid_date', header: 'Paid', render: (r) => (r.paid_date ? fmtDate(r.paid_date) : <Badge status="unpaid" />) },
+          { key: 'paid_date', header: 'Paid', render: (r) => (isPaid(r) ? fmtDate(r.paid_date) : <Badge status="unpaid" />) },
           ...(can('dev')
             ? [{ key: 'project_id', header: 'Project', render: (r) => (r.project_id ? <span className="cell-strong">{projectName(r.project_id)}</span> : <span className="muted">—</span>) }]
             : []),

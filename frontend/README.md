@@ -121,7 +121,7 @@ token) clears the session and returns you to the login screen.
   the empty form opens with the file still attached. A row booked from a
   document shows a paperclip; click the vendor name or the paperclip action to
   open the stored receipt in a modal (image inline, PDF in a frame, "Open in new
-  tab" link). Filters: type and payment status (unpaid / overdue / paid); tiles
+  tab" link). Filters: type and payment status (unpaid / overdue / paid, from the row's stored `status`); tiles
   show booked, unpaid and overdue totals.
   The Overview tab pulls its totals from paychecks, investments and the product
   catalog plus the ledger, showing only what your flags allow.

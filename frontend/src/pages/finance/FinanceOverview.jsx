@@ -16,7 +16,7 @@ import {
 import { HandCoins, Cloud, Boxes, BookOpen, Lock, TrendingDown, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { financeApi } from '../../api/finance'
-import { isOverdue } from '../../lib/expenses'
+import { isOverdue, isPaid } from '../../lib/expenses'
 import { hrApi } from '../../api/hr'
 import { devApi } from '../../api/devTracking'
 import { scmApi } from '../../api/scm'
@@ -86,7 +86,7 @@ export default function FinanceOverview() {
   const devSpend = (investments || []).reduce((s, i) => s + num(i.amount), 0)
   const catalogCost = (products || []).reduce((s, p) => s + num(p.cost), 0)
   const ledgerTotal = (expenses || []).reduce((s, e) => s + num(e.amount), 0)
-  const unpaid = (expenses || []).filter((e) => !e.paid_date)
+  const unpaid = (expenses || []).filter((e) => !isPaid(e))
   const overdue = unpaid.filter(isOverdue)
 
   // Monthly outflow: payroll (by payment date) + investments (by date), last 12 months with data.

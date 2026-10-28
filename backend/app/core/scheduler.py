@@ -42,6 +42,29 @@ async def github_sync_job() -> None:
         log.warning(f"[GITHUB_SYNC] {row['full_name']} (repo {row['id']}) failed: {row['last_error']}")
     log.info(f'[GITHUB_SYNC] finished, {len(result.synced)} synced, {len(result.failed)} failed')
 
+async def expense_status_job() -> None:
+    """
+    Scheduled refresh of `Finance.status`, job id `expense_status`, cron from `EXPENSE_STATUS_CRON`
+    Re-derives every expense not yet paid from its `due_date` so an unpaid bill turns `overdue` the day after its `due_date`; paid rows are left alone
+    Opens its own session and never raises, APScheduler reports job errors through std `logging` which is not forwarded to loguru
+    """
+    log.info('[EXPENSE_STATUS] started')
+    try:
+        async with SessionLocal() as session:
+            stmt = select(finance.Finance).where(finance.Finance.status != finance.ExpenseStatus.PAID)
+            open_bills = (await session.scalars(stmt)).all()
+            changed = 0
+            for expense in open_bills:
+                new_status = finance.ExpenseStatus.OVERDUE if expense.due_date is not None and expense.due_date < date.today() else finance.ExpenseStatus.UNPAID
+                if expense.status != new_status:
+                    expense.status = new_status
+                    changed += 1
+            await session.commit()
+    except Exception:
+        log.error(f'[EXPENSE_STATUS] failed: {format_exc()}')
+        return
+    log.info(f'[EXPENSE_STATUS] finished, {len(open_bills)} open bill(s) checked, {changed} changed')
+
 async def query_hr_summary(session: AsyncSession) -> dict[str, object]:
     """
     Aggregate the HR figures the summary prompt asks for (users, departments, attendance, leave, paychecks), in SQL
@@ -214,7 +237,7 @@ async def send_summary() -> list[str]:
 def start_scheduler() -> None:
     """
     Register the background jobs and start the scheduler, must run inside the event loop (the FastAPI lifespan does)
-    Jobs: `github_sync` (GITHUB_SYNC_CRON) and `summary_mail` (SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ / SUMMARY_SEND_WEEKDAY / SUMMARY_SEND_MONTHDAY,
+    Jobs: `github_sync` (GITHUB_SYNC_CRON), `expense_status` (EXPENSE_STATUS_CRON) and `summary_mail` (SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ / SUMMARY_SEND_WEEKDAY / SUMMARY_SEND_MONTHDAY,
     recipients = users with `send_summary`). Planned, not implemented: the monthly payroll job (PAYCHECK_CALCULATE_TIMESPOT)
     """
     log.info('[SCHEDULER] Function started')
@@ -224,6 +247,13 @@ def start_scheduler() -> None:
     except ValueError as err:
         # A bad cron string must not stop the app, the job is skipped
         log.error(f"[SCHEDULER] invalid GITHUB_SYNC_CRON '{settings.GITHUB_SYNC_CRON}' ({err}), github_sync not registered")
+
+    try:
+        status_trigger = CronTrigger.from_crontab(settings.EXPENSE_STATUS_CRON)
+        scheduler.add_job(expense_status_job, status_trigger, id='expense_status', name='Finance expense status refresh', replace_existing=True, misfire_grace_time=3600, coalesce=True)
+    except ValueError as err:
+        # A bad cron string must not stop the app, the job is skipped
+        log.error(f"[SCHEDULER] invalid EXPENSE_STATUS_CRON '{settings.EXPENSE_STATUS_CRON}' ({err}), expense_status not registered")
 
     # SUMMARY_* values are range-checked by config.py at startup, SUMMARY_SEND_TIME is the hour in server local time
     if settings.SUMMARY_SEND_FREQ == 'day':
