@@ -33,12 +33,14 @@ that a two-person company can actually run without hiring a bookkeeper.
 
 ## The flagship: "Receipt → Booked" 🚧
 
-The wedge we're building first. The first half works today: on the Finance page,
+The wedge we're building first. Both halves work today: on the Finance page,
 **Book from receipt** uploads a receipt or invoice, the AI reads it into a draft
 (vendor, invoice number, total, dates, type, category, project, paid or not) and
 the expense form opens prefilled for you to confirm. The same booking works in the
-chat by attaching the document and saying "book it". Scheduling the payment is
-still to come.
+chat by attaching the document and saying "book it". Scheduling the payment works
+too: give the bill a planned payment date (form or chat) and the Finance page's
+Payments tab lists what is due today, missed or upcoming; the accountant pays
+outside the system and marks the bill paid with one click.
 
 ```
 You:  *uploads a $340 AWS invoice*
@@ -48,7 +50,10 @@ AI:   Booked it. Here's what I did:
       • Categorized to        investment · Cloud (AWS)
       • Linked to project     carzinomax-dev
       • Due date              2026-08-14  → flagged
-      Want me to schedule the payment for the 12th?
+
+You:  Schedule the payment for the 12th.
+
+AI:   Done. It is planned for 2026-08-12 and will show on the Payments tab that day.
 ```
 
 One upload replaces five minutes of manual data entry — and it lands as a
@@ -67,12 +72,12 @@ receipts into expense drafts and runs the chat assistant.
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
 | **Dev Tracking** | ✅ Working | Projects, money invested per project (the investment expenses booked in Finance against the project, listed read-only), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced when added, automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
-| **Finance** | ✅ Working | Expense ledger: type (paycheck / petty cash / investment / other), amount, vendor, invoice number, category, document date, due date, paid date, a derived payment status (paid / unpaid / overdue), optional dev project link and the receipt it was booked from. Unpaid and overdue bills are shown on the ledger and the overview. An `investment` linked to a project is what Dev Tracking shows as that project's spend. The overview still rolls payroll, project investments and purchases into one view |
+| **Finance** | ✅ Working | Expense ledger: type (paycheck / petty cash / investment / other), amount, vendor, invoice number, category, document date, due date, paid date, planned payment date, a derived payment status (paid / unpaid / overdue), optional dev project link and the receipt it was booked from. Unpaid and overdue bills are shown on the ledger and the overview; the Payments tab is the accountant's worklist (due today, missed, upcoming, unplanned) with one-click "Mark paid". An `investment` linked to a project is what Dev Tracking shows as that project's spend. The overview still rolls payroll, project investments and purchases into one view |
 | **Purchases (SCM)** | 🚧 Minimal | Product catalog: SKU, cost, list price |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
-| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat. Payment scheduling is not built yet |
+| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat, and the bill can be scheduled (planned payment date, Payments tab, chat). The payment itself is still made by hand outside the system |
 | **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `expense_status` job re-derives the payment status of open bills on `EXPENSE_STATUS_CRON` (default 00:05 daily) so they turn overdue; the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
@@ -266,7 +271,7 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Chat attachments: a receipt image or PDF attached in the chat is read by the assistant
 - [x] Finance: amounts, vendors, invoice numbers, categories, document / due / paid dates, project link
 - [x] **AI "receipt → booked" flow**: upload a receipt, confirm the AI draft, booked (Finance page and chat)
-- [ ] Scheduling the payment of a booked expense
+- [x] Scheduling the payment of a booked expense (planned payment date + Payments tab; paying stays manual)
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
 - [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders

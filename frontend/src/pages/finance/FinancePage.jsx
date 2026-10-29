@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Wallet, BookOpen, PieChart as PieIcon, ScanLine, Paperclip } from 'lucide-react'
+import { Wallet, BookOpen, PieChart as PieIcon, ScanLine, Paperclip, CalendarCheck, CheckCircle2 } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import Tabs from '../../components/ui/Tabs'
 import Badge from '../../components/ui/Badge'
@@ -13,13 +13,14 @@ import { useToast } from '../../context/ToastContext'
 import { useList } from '../../lib/useList'
 import { financeApi, EXPENSE_TYPES, EXPENSE_CATEGORIES } from '../../api/finance'
 import { devApi } from '../../api/devTracking'
-import { num, currency, date as fmtDate, shortId, titleize, today, fileSize, BASE_CURRENCY } from '../../lib/format'
+import { num, currency, date as fmtDate, shortId, titleize, today, toDateInput, fileSize, BASE_CURRENCY } from '../../lib/format'
 import { isOverdue, isPaid } from '../../lib/expenses'
 import { UPLOAD_ACCEPT, UPLOAD_MAX_BYTES } from '../../lib/uploads'
 import FinanceOverview from './FinanceOverview'
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: PieIcon },
+  { key: 'payments', label: 'Payments', icon: CalendarCheck },
   { key: 'ledger', label: 'Expense ledger', icon: BookOpen },
 ]
 
@@ -41,6 +42,7 @@ export default function FinancePage() {
 
       <div className="tab-panel">
         {tab === 'overview' && <FinanceOverview />}
+        {tab === 'payments' && <PaymentsSection />}
         {tab === 'ledger' && <LedgerSection />}
       </div>
     </div>
@@ -144,6 +146,7 @@ function LedgerSection() {
     { key: 'reference', label: 'Invoice / receipt no.', placeholder: 'INV-0725', nullable: true },
     { key: 'expense_date', label: 'Document date', type: 'date', required: true, default: today() },
     { key: 'due_date', label: 'Due date', type: 'date', nullable: true },
+    { key: 'planned_pay_date', label: 'Planned payment date', type: 'date', nullable: true, hint: 'The day you intend to pay. The Payments tab lists what is due for payment.' },
     { key: 'category', label: 'Category', type: 'select', options: CATEGORY_OPTIONS, nullable: true },
     { key: 'paid_date', label: 'Paid on', type: 'date', nullable: true, hint: 'Leave empty while the bill is open; clearing it re-opens the bill.' },
     ...(projectOptions.length
@@ -246,12 +249,167 @@ function LedgerSection() {
           {
             key: 'due_date',
             header: 'Due',
-            render: (r) => (isOverdue(r) ? <Badge status="overdue">{fmtDate(r.due_date)}</Badge> : fmtDate(r.due_date)),
+            render: (r) => (
+              <span>
+                {isOverdue(r) ? <Badge status="overdue">{fmtDate(r.due_date)}</Badge> : fmtDate(r.due_date)}
+                {r.planned_pay_date && !isPaid(r) && <span className="cell-sub">pay {fmtDate(r.planned_pay_date)}</span>}
+              </span>
+            ),
           },
           { key: 'paid_date', header: 'Paid', render: (r) => (isPaid(r) ? fmtDate(r.paid_date) : <Badge status="unpaid" />) },
           ...(can('dev')
             ? [{ key: 'project_id', header: 'Project', render: (r) => (r.project_id ? <span className="cell-strong">{projectName(r.project_id)}</span> : <span className="muted">—</span>) }]
             : []),
+        ]}
+        fields={fields}
+      />
+      <ReceiptModal expense={viewing} onClose={closeReceipt} />
+    </>
+  )
+}
+
+/**
+ * The accountant's worklist: unpaid bills by their planned payment date. Payment itself
+ * happens outside the system; "Mark paid" records today's date, Edit reschedules.
+ */
+function PaymentsSection() {
+  const [view, setView] = useState('due') // due = planned today or earlier, upcoming = next 7 days, unplanned = no planned date
+  const [viewing, setViewing] = useState(null)
+  const closeReceipt = useCallback(() => setViewing(null), [])
+  const todayStr = today()
+  const weekEnd = toDateInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+  // Dates are ISO strings, so plain string comparison orders them like the ledger's sort
+  const isDue = (r) => !isPaid(r) && Boolean(r.planned_pay_date) && r.planned_pay_date <= todayStr
+  const isUpcoming = (r) => !isPaid(r) && Boolean(r.planned_pay_date) && r.planned_pay_date > todayStr && r.planned_pay_date <= weekEnd
+  const isUnplanned = (r) => !isPaid(r) && !r.planned_pay_date
+  const EMPTY_HINT = { due: 'Nothing due for payment today.', upcoming: 'Nothing planned in the next 7 days.', unplanned: 'Every open bill has a planned date.' }
+
+  const summary = (shown, all) => {
+    const sum = (list) => list.reduce((s, r) => s + num(r.amount), 0)
+    const todayRows = all.filter((r) => isDue(r) && r.planned_pay_date === todayStr)
+    const missed = all.filter((r) => isDue(r) && r.planned_pay_date < todayStr)
+    const upcoming = all.filter(isUpcoming)
+    const unplanned = all.filter(isUnplanned)
+    const tiles = [
+      { k: 'Today', v: currency(sum(todayRows)), hint: `${todayRows.length} to pay` },
+      { k: 'Missed', v: currency(sum(missed)), hint: `${missed.length} planned earlier`, accent: missed.length > 0 },
+      { k: 'Upcoming', v: currency(sum(upcoming)), hint: `${upcoming.length} in the next 7 days` },
+      { k: 'Unplanned', v: currency(sum(unplanned)), hint: `${unplanned.length} without a date`, accent: unplanned.some(isOverdue) },
+    ]
+    return (
+      <div className="summary-row">
+        {tiles.map((t) => (
+          <div key={t.k} className={`summary-tile ${t.accent ? 'accent' : ''}`}>
+            <span className="sum-k">{t.k}</span>
+            <span className="sum-v">{t.v}</span>
+            <span className="sum-hint">{t.hint}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const fields = [
+    { key: 'planned_pay_date', label: 'Planned payment date', type: 'date', nullable: true, hint: 'The day you intend to pay; clear it to move the bill back to Unplanned.' },
+    { key: 'paid_date', label: 'Paid on', type: 'date', nullable: true, hint: 'Leave empty while the bill is open; clearing it re-opens the bill.' },
+  ]
+
+  return (
+    <>
+      <ResourceSection
+        title="Payments"
+        subtitle="Open bills by the day you plan to pay them. Pay outside the system, then mark the bill paid here."
+        moduleName="Finance"
+        fetcher={() => financeApi.listExpenses()}
+        update={(row, payload) => financeApi.updateExpense(row.id, payload)}
+        updateTitle="Edit payment"
+        emptyHint={EMPTY_HINT[view]}
+        emptyIcon={CalendarCheck}
+        summary={summary}
+        rowsTransform={(rows) =>
+          [...rows]
+            .filter((r) => (view === 'upcoming' ? isUpcoming(r) : view === 'unplanned' ? isUnplanned(r) : isDue(r)))
+            .sort((a, b) =>
+              view === 'unplanned'
+                ? (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31') || num(b.amount) - num(a.amount)
+                : a.planned_pay_date.localeCompare(b.planned_pay_date) || num(b.amount) - num(a.amount),
+            )
+        }
+        toolbarExtra={
+          <Select value={view} onChange={(e) => setView(e.target.value)} aria-label="Which bills to show">
+            <option value="due">Due for payment</option>
+            <option value="upcoming">Upcoming (7 days)</option>
+            <option value="unplanned">Unplanned</option>
+          </Select>
+        }
+        rowActions={(r, { reload, toast }) => (
+          <>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Mark paid"
+              aria-label="Mark paid"
+              onClick={async () => {
+                try {
+                  await financeApi.updateExpense(r.id, { paid_date: today() })
+                  toast.success(`${r.vendor || 'Expense'} · ${currency(r.amount)} marked paid`)
+                  reload()
+                } catch (err) {
+                  toast.error(err?.detail || 'Could not update expense')
+                }
+              }}
+            >
+              <CheckCircle2 size={15} color="var(--success)" />
+            </button>
+            {r.receipt_path ? (
+              <button type="button" className="icon-btn" onClick={() => setViewing(r)} aria-label="View receipt" title="View receipt">
+                <Paperclip size={15} />
+              </button>
+            ) : null}
+          </>
+        )}
+        columns={[
+          {
+            key: 'planned_pay_date',
+            header: 'Planned',
+            render: (r) =>
+              r.planned_pay_date ? (
+                <span className="row gap-1 wrap">
+                  {fmtDate(r.planned_pay_date)}
+                  {r.planned_pay_date < todayStr && <Badge status="overdue">missed</Badge>}
+                  {r.planned_pay_date === todayStr && <Badge tone="info">today</Badge>}
+                  {r.due_date && r.planned_pay_date > r.due_date && <Badge tone="warning">after due</Badge>}
+                </span>
+              ) : (
+                <span className="muted">—</span>
+              ),
+          },
+          {
+            key: 'vendor',
+            header: 'Vendor',
+            render: (r) => (
+              <span>
+                <span className="cell-strong">
+                  {r.receipt_path ? (
+                    <button type="button" className="link-btn" onClick={() => setViewing(r)} title="View receipt" aria-label={`View receipt from ${r.vendor || 'unknown vendor'}`}>
+                      {r.vendor || '—'}
+                      <Paperclip size={12} style={{ marginLeft: 6, verticalAlign: -1 }} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    r.vendor || '—'
+                  )}
+                </span>
+                <span className="cell-sub">{r.reference || r.description || ''}</span>
+              </span>
+            ),
+          },
+          { key: 'amount', header: 'Amount', align: 'right', render: (r) => <span className="cell-num">{currency(r.amount)}</span> },
+          {
+            key: 'due_date',
+            header: 'Due',
+            render: (r) => (isOverdue(r) ? <Badge status="overdue">{fmtDate(r.due_date)}</Badge> : fmtDate(r.due_date)),
+          },
+          { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
         ]}
         fields={fields}
       />

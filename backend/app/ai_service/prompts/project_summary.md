@@ -24,7 +24,7 @@ Total amount per expense type (paycheck, petty_cash, investment, other)
 Total amount this month compared with last month (by expense date)
 Largest single expense
 When the newest expense was recorded
-How many expense unpaid and their total, how many of them overdue and their total, and the next due date
+How many expense unpaid and their total, how many of them overdue and their total, the next due date, and how many bills are planned for payment today or earlier and still unpaid, with their total
 
 ## SCM
 How many product

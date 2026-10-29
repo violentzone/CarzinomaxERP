@@ -147,12 +147,13 @@ class CreateExpense(BaseModel):
     expense_date: date = Field(default_factory=date.today)  # document date, today when recorded by hand
     due_date: date | None = None
     paid_date: date | None = None
+    planned_pay_date: date | None = None  # day the accountant intends to pay, shown on the Payments tab
     project_id: int | None = None
     receipt_path: str | None = None  # `receipt_path` returned by POST /finance/receipt
 
 
 # Optional columns the ledger form may clear by sending an explicit null (the other routers ignore nulls)
-CLEARABLE_EXPENSE_FIELDS = ('vendor', 'reference', 'description', 'category', 'due_date', 'paid_date', 'project_id')
+CLEARABLE_EXPENSE_FIELDS = ('vendor', 'reference', 'description', 'category', 'due_date', 'paid_date', 'planned_pay_date', 'project_id')
 
 
 class UpdateExpense(BaseModel):
@@ -165,6 +166,7 @@ class UpdateExpense(BaseModel):
     expense_date: date | None = None
     due_date: date | None = None
     paid_date: date | None = None
+    planned_pay_date: date | None = None
     project_id: int | None = None
 
 

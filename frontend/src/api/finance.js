@@ -3,8 +3,8 @@
  *
  * The finance ledger is an expense log: each record has a UUID, an
  * `expense_type` of `paycheck | petty_cash | investment | other`, an `amount`,
- * and optional vendor, reference, description, category, document / due / paid
- * dates, a dev `project_id` and the `receipt_path` of the document it was booked from.
+ * and optional vendor, reference, description, category, document / due / paid /
+ * planned-payment dates, a dev `project_id` and the `receipt_path` of the document it was booked from.
  */
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, apiGetBlob } from '../lib/api'
 

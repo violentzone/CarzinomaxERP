@@ -87,6 +87,7 @@ def upgrade() -> None:
     sa.Column('expense_date', sa.Date(), nullable=False),
     sa.Column('due_date', sa.Date(), nullable=True),
     sa.Column('paid_date', sa.Date(), nullable=True),
+    sa.Column('planned_pay_date', sa.Date(), nullable=True),
     sa.Column('project_id', sa.Integer(), nullable=True),
     sa.Column('receipt_path', sa.String(length=255), nullable=True),
     sa.Column('status', sa.Enum('paid', 'unpaid', 'overdue', name='expensestatus', native_enum=False, create_constraint=True, length=32), nullable=False),
