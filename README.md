@@ -31,9 +31,9 @@ Carzinomax DEV flips it: the ERP does the paperwork **for** you. You hand it a
 document; the AI does the busywork and asks you to confirm. The goal is an ERP
 that a two-person company can actually run without hiring a bookkeeper.
 
-## The flagship: "Receipt → Booked" 🚧
+## The flagship: "Receipt → Booked" ✅
 
-The wedge we're building first. Both halves work today: on the Finance page,
+The wedge we built first, and it works end to end today: on the Finance page,
 **Book from receipt** uploads a receipt or invoice, the AI reads it into a draft
 (vendor, invoice number, total, dates, type, category, project, paid or not) and
 the expense form opens prefilled for you to confirm. The same booking works in the
@@ -77,7 +77,7 @@ receipts into expense drafts and runs the chat assistant.
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
-| **AI back office** | 🚧 In progress | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat, and the bill can be scheduled (planned payment date, Payments tab, chat). The payment itself is still made by hand outside the system |
+| **AI back office** | ✅ Working | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat, and the bill can be scheduled (planned payment date, Payments tab, chat). The payment itself is made by hand and then marked paid: there is no banking integration, so money never moves through the system |
 | **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `expense_status` job re-derives the payment status of open bills on `EXPENSE_STATUS_CRON` (default 00:05 daily) so they turn overdue; the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
 
 Every module endpoint answers with the same envelope, so the frontend and any
