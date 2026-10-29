@@ -35,7 +35,7 @@ How many product without description
 ## Dev Tracking
 How many project and how many without a tracked GitHub repo
 Total investment and investment this month
-Total investment per category (cloud, software_licenses, hardware, consulting, other)
+Total investment per category (cloud, software_licenses, hardware, consulting, travel, office, meals, other)
 How many tracked GitHub repo, total stars and total downloads
 When the last GitHub sync ran and how many repo have a sync error
 How many download snapshot and the date of the newest one

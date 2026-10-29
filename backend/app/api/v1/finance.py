@@ -15,20 +15,24 @@ from starlette import status
 
 from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
-from app.core.finance import investment_from_expense
 from app.core.log_module import user_log
 from app.core.receipts import extract_receipt
 from app.core.uploads import MIME_BY_EXTENSION, UPLOAD_ROOT, attachment_path, load_attachment, save_attachment
-from app.models import DevProject, ExpenseCategory, ExpenseType, Finance, User
+from app.models import DevProject, ExpenseCategory, ExpenseType, Finance, ExpenseStatus, User
 
 finance_router = APIRouter(prefix="/finance", tags=["Finance"])
 
 
 @finance_router.get("/expense_list")
-async def get_expense_list(current_user: User = Depends(get_current_user), db = Depends(get_db)):
+async def get_expense_list(start_date: date | None = None, end_date: date | None = None, expense_type: ExpenseType | None = None, category: ExpenseCategory | None = None, payment_status: ExpenseStatus | None = None, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
-    Get all finance expense records in the database.
+    Get finance expense records in the database, filtered by the query parameters that are given
     Args:
+        start_date: Earliest `expense_date` to include (inclusive), None for no lower bound
+        end_date: Latest `expense_date` to include (inclusive), None for no upper bound
+        expense_type: Only expenses of this type, None for all types
+        category: Only expenses in this category, None for all categories
+        payment_status: Only expenses with this payment status (`paid`, `unpaid`, `overdue`), None for all
         current_user: Signed in user
         db: Database session(Created by `get_db`)
 
@@ -38,8 +42,19 @@ async def get_expense_list(current_user: User = Depends(get_current_user), db = 
     log = user_log(current_user.id)
     if not await permission_check('finance', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('[EXPENSE] Query all expenses')
-    expenses = (await db.scalars(select(Finance))).all()
+    log.info(f'[EXPENSE] Query expenses with start_date={start_date}, end_date={end_date}, expense_type={expense_type}, category={category}, payment_status={payment_status}')
+    stmt = select(Finance)
+    if start_date is not None:
+        stmt = stmt.where(Finance.expense_date >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Finance.expense_date <= end_date)
+    if expense_type is not None:
+        stmt = stmt.where(Finance.expense_type == expense_type)
+    if category is not None:
+        stmt = stmt.where(Finance.category == category)
+    if payment_status is not None:
+        stmt = stmt.where(Finance.status == payment_status)
+    expenses = (await db.scalars(stmt)).all()
     data = []
     for e in expenses:
         data.append(e.to_dict())
@@ -175,6 +190,12 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
             log.warning(f'[EXPENSE] Dev project ID: {new_expense.project_id} not found')
             return JSONResponse({"status": "fail", "error": f"Dev project with id {new_expense.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
         expense = Finance(**new_expense.model_dump(exclude_none=True))
+        if expense.paid_date is not None:
+            expense.status = ExpenseStatus.PAID
+        elif expense.due_date is not None and expense.due_date < date.today():
+            expense.status = ExpenseStatus.OVERDUE
+        else:
+            expense.status = ExpenseStatus.UNPAID
         if new_expense.receipt_path is not None:
             # Only a file POST /finance/receipt stored for this caller may be linked, and it is stored by its canonical "<user_id>/<uuid>.<ext>" path
             parts = PurePosixPath(new_expense.receipt_path).parts
@@ -182,15 +203,10 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
                 raise ValueError(f'Unknown receipt {new_expense.receipt_path}')
             expense.receipt_path = attachment_path(current_user.id, PurePosixPath(parts[1]).stem).relative_to(UPLOAD_ROOT).as_posix()
         db.add(expense)
-        investment = investment_from_expense(expense)
-        if investment:
-            db.add(investment)
         await db.commit()
         await db.refresh(expense)
         expense_data = expense.to_dict()
         log.info(f'[EXPENSE] Expense created: {expense_data}')
-        if investment:
-            log.info(f'[EXPENSE] Expense {expense.id} mirrored as dev investment {investment.id}')
         return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'[EXPENSE] Failed to create expense: {format_exc()}')
@@ -228,6 +244,12 @@ async def update_expense(expense_id: UUID, new_expense: UpdateExpense, current_u
             # A null that was sent on purpose clears a clearable field, e.g. re-opening a bill by clearing paid_date
             if field_value is not None or (field_name in CLEARABLE_EXPENSE_FIELDS and field_name in new_expense.model_fields_set):
                 setattr(old_expense, field_name, field_value)
+        if old_expense.paid_date is not None:
+            old_expense.status = ExpenseStatus.PAID
+        elif old_expense.due_date is not None and old_expense.due_date < date.today():
+            old_expense.status = ExpenseStatus.OVERDUE
+        else:
+            old_expense.status = ExpenseStatus.UNPAID
         await db.commit()
         await db.refresh(old_expense)
         log.info(f'[EXPENSE] Expense updated: {old_expense.to_dict()}')

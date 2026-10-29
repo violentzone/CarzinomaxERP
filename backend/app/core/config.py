@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # GitHub stars/downloads sync (app/core/github.py, scheduler job "github_sync")
     GITHUB_TOKEN: str = ""                 # optional PAT; required for private repos, lifts the limit to 5000 req/h
     GITHUB_SYNC_CRON: str = "0 */6 * * *"  # crontab; APScheduler counts day-of-week from Monday = 0
+
+    # Finance expense status refresh (scheduler job "expense_status")
+    EXPENSE_STATUS_CRON: str = "5 0 * * *"  # crontab; daily shortly after midnight so an unpaid bill turns overdue the day after its due date
     
     # Async database URL computed automatically
     ASYNC_DATABASE_URL: str = ""

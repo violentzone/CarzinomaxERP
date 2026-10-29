@@ -16,7 +16,13 @@ class ExpenseType(str, enum.Enum):
     OTHER = "other"
 
 
-# What the money went on; the first four match DevInvestment.category so an investment expense can be mirrored there
+class ExpenseStatus(str, enum.Enum):
+    PAID = "paid"
+    UNPAID = "unpaid"
+    OVERDUE = "overdue"
+
+
+# What the money went on; an `investment` with a `project_id` is what Dev Tracking shows as project spend
 ExpenseCategory = Literal['cloud', 'software_licenses', 'hardware', 'consulting', 'travel', 'office', 'meals', 'other']
 
 
@@ -45,3 +51,14 @@ class Finance(Base, TimestampMixin):
     paid_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # NULL = unpaid
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="SET NULL"), nullable=True)
     receipt_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # stored upload, "<user_id>/<uuid>.<ext>" under UPLOAD_DIR
+    status: Mapped[ExpenseStatus] = mapped_column(
+        Enum(
+            ExpenseStatus,
+            native_enum=False,
+            length=32,
+            values_callable=lambda e: [m.value for m in e],
+            validate_strings=True,
+            create_constraint=True,
+        ),
+        nullable=False,
+    )

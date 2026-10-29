@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import BigInteger, String, Numeric, Date, DateTime, Text, ForeignKey
+from sqlalchemy import BigInteger, String, Date, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -13,22 +13,6 @@ class DevProject(Base, TimestampMixin):
     project_id: Mapped[int] = mapped_column(primary_key=True, index=True)
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     project_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-
-# Values of DevInvestment.category (keep the Literals in tool_store.py and dev_helper_prompt.md in step); an expense category outside this list is mirrored as "other"
-DEV_INVESTMENT_CATEGORIES = ('cloud', 'software_licenses', 'hardware', 'consulting', 'other')
-
-
-class DevInvestment(Base, TimestampMixin):
-    __tablename__ = "dev_investments"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    date: Mapped[date] = mapped_column(Date, nullable=False)
-    project_id: Mapped[int] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="CASCADE"), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    vendor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # AWS, GCP, Vercel, etc.
-    category: Mapped[str] = mapped_column(String(100), default="cloud", nullable=False)  # cloud, software_licenses, hardware, consulting, other
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class ProjectDownload(Base, TimestampMixin):

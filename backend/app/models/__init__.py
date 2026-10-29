@@ -1,6 +1,6 @@
 from app.models.base import Base, TimestampMixin
 from app.models.auth import User
-from app.models.finance import ExpenseCategory, ExpenseType, Finance
+from app.models.finance import ExpenseCategory, ExpenseType, Finance, ExpenseStatus
 from app.models.scm import (
     Product,
 )
@@ -12,7 +12,6 @@ from app.models.hr import (
 )
 from app.models.dev_tracking import (
     DevProject,
-    DevInvestment,
     ProjectDownload,
     GithubRepo,
 )
@@ -30,7 +29,6 @@ __all__ = [
     "LeaveRequest",
     "Paycheck",
     "DevProject",
-    "DevInvestment",
     "ProjectDownload",
     "GithubRepo",
 ]

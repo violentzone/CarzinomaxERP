@@ -7,7 +7,7 @@ import ResourceSection from '../../components/ResourceSection'
 import Badge from '../../components/ui/Badge'
 import Card from '../../components/ui/Card'
 import { Select } from '../../components/ui/Field'
-import { devApi, INVESTMENT_CATEGORIES, DOWNLOAD_PLATFORMS } from '../../api/devTracking'
+import { devApi, DOWNLOAD_PLATFORMS } from '../../api/devTracking'
 import { useList } from '../../lib/useList'
 import { projectStats, downloadSeries } from '../../lib/devStats'
 import { num, currency, compactCurrency, number, compactNumber, date as fmtDate, dateTime, titleize, today, parseDate } from '../../lib/format'
@@ -19,7 +19,6 @@ const TABS = [
   { key: 'repos', label: 'GitHub repos', icon: GitBranch },
 ]
 
-const CATEGORIES = INVESTMENT_CATEGORIES.map((v) => ({ value: v, label: titleize(v) }))
 const PLATFORMS = DOWNLOAD_PLATFORMS.map((v) => ({ value: v, label: titleize(v) }))
 
 /** Dev tracking: the programs being built, what they cost, and how they're doing out there. */
@@ -57,7 +56,7 @@ export default function DevTrackingPage() {
           />
         )}
         {tab === 'investments' && (
-          <InvestmentsSection key={tick} projectOptions={projectOptions} projectName={projectName} onChanged={refresh} />
+          <InvestmentsSection key={tick} projectOptions={projectOptions} projectName={projectName} />
         )}
         {tab === 'downloads' && (
           <DownloadsSection key={tick} projectOptions={projectOptions} projectName={projectName} onChanged={refresh} />
@@ -119,7 +118,7 @@ function ProjectsSection({ investments, downloads, onChanged }) {
       updateTitle="Edit project"
       remove={wrap((row) => devApi.deleteProject(row.project_id))}
       removeLabel="project"
-      removeHint={(r) => `${r.project_name} — its investments and download records are deleted too.`}
+      removeHint={(r) => `${r.project_name} — its download records and tracked repos are deleted too; its expenses stay in Finance without a project.`}
       emptyHint="Add the first program you are developing."
       emptyIcon={FolderKanban}
       summary={summary}
@@ -204,13 +203,8 @@ function ProjectsSection({ investments, downloads, onChanged }) {
 
 /* ------------------------------------------------------------------------ */
 
-function InvestmentsSection({ projectOptions, projectName, onChanged }) {
+function InvestmentsSection({ projectOptions, projectName }) {
   const [projectFilter, setProjectFilter] = useState('')
-  const wrap = (fn) => async (...args) => {
-    const out = await fn(...args)
-    onChanged()
-    return out
-  }
 
   const summary = (rows) => {
     const total = rows.reduce((s, r) => s + num(r.amount), 0)
@@ -235,53 +229,30 @@ function InvestmentsSection({ projectOptions, projectName, onChanged }) {
     )
   }
 
+  // Read-only: an investment is a finance expense with a project, booked and edited on the Finance page
   return (
     <ResourceSection
       title="Investments"
-      subtitle="Cloud, licences, hardware and consulting spent on each project."
+      subtitle="Investment expenses booked in Finance against a project."
       moduleName="Dev Tracking"
       fetcher={() => devApi.listInvestments()}
-      create={wrap(devApi.createInvestment)}
-      createLabel="Log investment"
-      createTitle="Log an investment"
-      update={wrap((row, payload) => devApi.updateInvestment(row.id, payload))}
-      updateTitle="Edit investment"
-      remove={wrap((row) => devApi.deleteInvestment(row.id))}
-      removeLabel="investment"
-      removeHint={(r) => `${r.vendor} · ${currency(r.amount)} · ${fmtDate(r.date)}`}
-      emptyHint="Log the first cloud bill or licence for a project."
+      emptyHint="Book an investment expense with a project in Finance."
       emptyIcon={Cloud}
       summary={summary}
       rowsTransform={(rows) =>
         [...rows]
           .filter((r) => !projectFilter || String(r.project_id) === projectFilter)
-          .sort((a, b) => (parseDate(b.date) ?? 0) - (parseDate(a.date) ?? 0) || b.id - a.id)
+          .sort((a, b) => (parseDate(b.expense_date) ?? 0) - (parseDate(a.expense_date) ?? 0) || (parseDate(b.created_at) ?? 0) - (parseDate(a.created_at) ?? 0))
       }
       toolbarExtra={<ProjectFilter value={projectFilter} onChange={setProjectFilter} options={projectOptions} />}
       columns={[
-        { key: 'date', header: 'Date', render: (r) => fmtDate(r.date) },
+        { key: 'expense_date', header: 'Date', render: (r) => fmtDate(r.expense_date) },
         { key: 'project_id', header: 'Project', render: (r) => <span className="cell-strong">{projectName(r.project_id)}</span> },
-        { key: 'vendor', header: 'Vendor', render: (r) => r.vendor },
-        { key: 'category', header: 'Category', render: (r) => <Badge status={r.category} /> },
+        { key: 'vendor', header: 'Vendor', render: (r) => r.vendor || '—' },
+        { key: 'category', header: 'Category', render: (r) => (r.category ? <Badge status={r.category} /> : <span className="muted">—</span>) },
         { key: 'amount', header: 'Amount', align: 'right', render: (r) => <span className="cell-num">{currency(r.amount)}</span> },
+        { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
         { key: 'description', header: 'Note', render: (r) => <span className="cell-sub">{r.description || '—'}</span> },
-      ]}
-      fields={[
-        {
-          key: 'project_id',
-          label: 'Project',
-          type: 'select',
-          numeric: true,
-          required: true,
-          full: true,
-          options: projectOptions,
-          placeholder: projectOptions.length ? 'Select a project…' : 'Create a project first',
-        },
-        { key: 'date', label: 'Date', type: 'date', required: true, default: today() },
-        { key: 'amount', label: 'Amount', type: 'number', step: '0.01', min: 0, required: true },
-        { key: 'vendor', label: 'Vendor', required: true, placeholder: 'AWS, GitHub, JetBrains…' },
-        { key: 'category', label: 'Category', type: 'select', options: CATEGORIES, default: 'cloud' },
-        { key: 'description', label: 'Note', type: 'textarea', full: true, nullable: true },
       ]}
     />
   )

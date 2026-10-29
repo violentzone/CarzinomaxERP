@@ -13,7 +13,7 @@ The ERP is sized for a small unit and does three things:
 2. **Pays individual members** — every user is an employee; paychecks, leave
    and attendance are recorded per user.
 3. **Handles the unit's finances** — a typed expense ledger plus an overview
-   that rolls payroll, project investments and purchases into one view.
+   that rolls payroll, project investments (the ledger's investment expenses with a project) and purchases into one view.
 
 ## Stack
 
@@ -97,7 +97,10 @@ token) clears the session and returns you to the login screen.
 
 ## Module notes
 
-- **Dev Tracking** — projects are keyed by `project_id`. "Downloads" for a
+- **Dev Tracking** — projects are keyed by `project_id`. The Investments tab is
+  read-only: it lists the finance expenses of type `investment` with a `project_id`
+  (`GET /dev_tracking/investment_list`, UUID `id`, `expense_date`), booked and
+  edited on the Finance page. "Downloads" for a
   project is the sum of the *latest* snapshot on each platform, not the sum of
   every row; "stars" is the highest count seen in those snapshots. Rows with
   platform `github` are also written by the backend's GitHub sync (one row per
@@ -121,10 +124,11 @@ token) clears the session and returns you to the login screen.
   the empty form opens with the file still attached. A row booked from a
   document shows a paperclip; click the vendor name or the paperclip action to
   open the stored receipt in a modal (image inline, PDF in a frame, "Open in new
-  tab" link). Filters: type and payment status (unpaid / overdue / paid); tiles
+  tab" link). Filters: type and payment status (unpaid / overdue / paid, from the row's stored `status`); tiles
   show booked, unpaid and overdue totals.
-  The Overview tab pulls its totals from paychecks, investments and the product
-  catalog plus the ledger, showing only what your flags allow.
+  The Overview tab pulls its totals from paychecks, the product catalog and the
+  ledger (project investments are the ledger's investment expenses with a project),
+  showing only what your flags allow.
 - **Purchases** — the SCM router is a product catalog (SKU, cost, list price).
 - **Assistant** — the chat drawer (topbar button) streams the orchestrator's reply;
   deletes pause for your approval. The paperclip or a pasted image attaches
