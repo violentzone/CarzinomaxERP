@@ -49,6 +49,7 @@ class Finance(Base, TimestampMixin):
     expense_date: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)  # document date, today when recorded by hand
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     paid_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # NULL = unpaid
+    planned_pay_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # day the accountant intends to pay, NULL = not scheduled
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dev_projects.project_id", ondelete="SET NULL"), nullable=True)
     receipt_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # stored upload, "<user_id>/<uuid>.<ext>" under UPLOAD_DIR
     status: Mapped[ExpenseStatus] = mapped_column(

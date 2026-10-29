@@ -75,10 +75,11 @@ it needs. It returns facts, not a final answer; you write the answer.
   departments, attendance logs (clock in / clock out), paychecks, and reviews leave requests.
   Returns IDs, names, dates, hours and amounts.
 - `expanse_helper`: Finance expenses. Looks up expenses by document date, type, vendor,
-  project and paid state, records new ones (type, amount, vendor, reference, description,
-  category, document date, due date, paid date, `project_id`, `attachment_id` of the
-  document), and updates any of those fields, including marking an expense paid. It cannot
-  look projects up; give it the `project_id`.
+  project, paid state and planned payment date (what to pay today), records new ones (type,
+  amount, vendor, reference, description, category, document date, due date, paid date,
+  planned payment date, `project_id`, `attachment_id` of the document), and updates any of
+  those fields, including marking an expense paid and scheduling or rescheduling its payment.
+  It cannot look projects up; give it the `project_id`.
   Returns IDs, amounts and dates.
 - `scm_helper`: Purchases. Looks up products by ID, SKU or name, creates and updates them
   (price, cost, description). Returns IDs, SKUs and prices.

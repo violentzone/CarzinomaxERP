@@ -115,8 +115,12 @@ token) clears the session and returns you to the login screen.
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
   new log at "now", or closes their latest open log and fills `total_hours`.
 - **Finance** — the ledger records each expense's type, amount, vendor, invoice
-  number, category, document / due / paid dates and an optional project (the
-  project field and column appear only with dev access). **Book from receipt**
+  number, category, document / due / paid / planned-payment dates and an optional project (the
+  project field and column appear only with dev access). The **Payments** tab is the
+  accountant's worklist: unpaid bills whose planned payment date is today or earlier
+  (missed ones badged), with Upcoming (7 days) and Unplanned views, tiles computed from
+  every row (`ResourceSection` passes `summary(shown, all)`), a "Mark paid" row action
+  that sets today's paid date, and an Edit modal for the planned and paid dates. **Book from receipt**
   uploads a PNG / JPEG / WebP / PDF (10 MB), the backend's AI reads it
   (`POST /finance/receipt`) and the create modal opens prefilled with the draft
   and a note on confidence; nothing is saved until you press Save, which posts

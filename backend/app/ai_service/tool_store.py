@@ -231,6 +231,7 @@ class ExpenseDetail(BaseModel):
     expense_date: date_type
     due_date: date_type | None
     paid_date: date_type | None
+    planned_pay_date: date_type | None
     project_id: int | None
     receipt_path: str | None
     status: ExpenseStatus
@@ -250,6 +251,8 @@ def get_expenses(
     project_id: int | None = None,
     unpaid_only: bool | None = None,
     status: Literal["paid", "unpaid", "overdue"] | None = None,
+    planned_start: date_type | None = None,
+    planned_end: date_type | None = None,
 ) -> GetExpensesOutput | None:
     """
     Gets expenses data from database table "finance", filtered by parameters that is not None
@@ -261,6 +264,8 @@ def get_expenses(
         project_id: Dev project the expenses are linked to, None if not filter by project
         unpaid_only: True to return only expenses without a paid_date, None or False for all
         status: Payment status to filter by (paid, unpaid, overdue), None if not filter by status
+        planned_start: Earliest `planned_pay_date` to include (inclusive), None if not filter by planned payment date
+        planned_end: Latest `planned_pay_date` to include (inclusive), None if not filter by planned payment date
 
     Returns:
         Expenses data, each expense listed in `GetExpensesOutput.expense_detail` with summed amount in `total`, None if no expenses found with filter given
@@ -280,6 +285,10 @@ def get_expenses(
         stmt = stmt.where(Finance.paid_date.is_(None))
     if status is not None:
         stmt = stmt.where(Finance.status == ExpenseStatus(status))
+    if planned_start is not None:
+        stmt = stmt.where(Finance.planned_pay_date >= planned_start)
+    if planned_end is not None:
+        stmt = stmt.where(Finance.planned_pay_date <= planned_end)
 
     with SyncSessionLocal() as session:
         expenses = (session.execute(stmt)).scalars().all()
@@ -303,6 +312,7 @@ def create_expense(
     expense_date: date_type | None = None,
     due_date: date_type | None = None,
     paid_date: date_type | None = None,
+    planned_pay_date: date_type | None = None,
     project_id: int | None = None,
     attachment_id: str | None = None,
 ) -> ExpenseDetail:
@@ -318,6 +328,7 @@ def create_expense(
         expense_date: Date on the document, None for today
         due_date: Payment due date, None if none
         paid_date: Date the expense was paid, None if unpaid
+        planned_pay_date: Day the accountant intends to pay the bill, None if not scheduled
         project_id: Dev project the expense belongs to, must exist, None if none
         attachment_id: `id` of the attached receipt or invoice the expense is booked from, stored as the expense's receipt, None if none
 
@@ -334,7 +345,7 @@ def create_expense(
             project = session.get(DevProject, project_id)
             if project is None:
                 raise ValueError(f'Dev project with id {project_id} not found')
-        expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id, receipt_path=receipt_path)
+        expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, planned_pay_date=planned_pay_date, project_id=project_id, receipt_path=receipt_path)
         if expense.paid_date is not None:
             expense.status = ExpenseStatus.PAID
         elif expense.due_date is not None and expense.due_date < date_type.today():
@@ -359,6 +370,7 @@ def update_expense(
     expense_date: date_type | None = None,
     due_date: date_type | None = None,
     paid_date: date_type | None = None,
+    planned_pay_date: date_type | None = None,
     project_id: int | None = None,
 ) -> ExpenseDetail:
     """
@@ -374,6 +386,7 @@ def update_expense(
         expense_date: New document date, None if not change
         due_date: New payment due date, None if not change
         paid_date: Date the expense was paid (marks it paid), None if not change
+        planned_pay_date: New day the accountant intends to pay the bill (schedule or reschedule), None if not change
         project_id: New dev project, must exist, None if not change
 
     Returns:
@@ -406,6 +419,8 @@ def update_expense(
             expense.due_date = due_date
         if paid_date is not None:
             expense.paid_date = paid_date
+        if planned_pay_date is not None:
+            expense.planned_pay_date = planned_pay_date
         if expense.paid_date is not None:
             expense.status = ExpenseStatus.PAID
         elif expense.due_date is not None and expense.due_date < date_type.today():

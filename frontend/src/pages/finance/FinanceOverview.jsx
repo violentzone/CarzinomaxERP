@@ -20,7 +20,7 @@ import { isOverdue, isPaid } from '../../lib/expenses'
 import { hrApi } from '../../api/hr'
 import { devApi } from '../../api/devTracking'
 import { scmApi } from '../../api/scm'
-import { num, currency, compactCurrency, date as fmtDate, monthKey, monthLabel, titleize, userName, CHART_COLORS, parseDate } from '../../lib/format'
+import { num, currency, compactCurrency, date as fmtDate, monthKey, monthLabel, titleize, userName, CHART_COLORS, parseDate , today } from '../../lib/format'
 import { staggerContainer } from '../../lib/motion'
 import { MODULE_LABELS } from '../../lib/roles'
 import StatCard from '../../components/ui/StatCard'
@@ -89,6 +89,7 @@ export default function FinanceOverview() {
   const ledgerTotal = (expenses || []).reduce((s, e) => s + num(e.amount), 0)
   const unpaid = (expenses || []).filter((e) => !isPaid(e))
   const overdue = unpaid.filter(isOverdue)
+  const toPayToday = unpaid.filter((e) => e.planned_pay_date && e.planned_pay_date <= today())
 
   // Monthly outflow: payroll (by payment date) + investments (by date), last 12 months with data.
   const months = {}
@@ -133,7 +134,7 @@ export default function FinanceOverview() {
     investments && { label: 'Project investments', value: devSpend, format: compactCurrency, icon: Cloud, hint: `${investments.length} entries` },
     products && { label: 'Purchase catalog cost', value: catalogCost, format: compactCurrency, icon: Boxes, hint: `${products.length} items` },
     expenses && { label: 'Expense ledger', value: ledgerTotal, format: compactCurrency, icon: BookOpen, hint: `${expenses.length} expenses booked` },
-    expenses && { label: 'Unpaid bills', value: unpaid.reduce((s, e) => s + num(e.amount), 0), format: compactCurrency, icon: AlertTriangle, hint: overdue.length ? `${overdue.length} overdue · ${currency(overdue.reduce((s, e) => s + num(e.amount), 0))}` : `${unpaid.length} open, none overdue` },
+    expenses && { label: 'Unpaid bills', value: unpaid.reduce((s, e) => s + num(e.amount), 0), format: compactCurrency, icon: AlertTriangle, hint: [overdue.length ? `${overdue.length} overdue · ${currency(overdue.reduce((s, e) => s + num(e.amount), 0))}` : `${unpaid.length} open, none overdue`, toPayToday.length ? `${toPayToday.length} to pay today` : null].filter(Boolean).join(' · ') },
   ].filter(Boolean)
 
   const locked = [

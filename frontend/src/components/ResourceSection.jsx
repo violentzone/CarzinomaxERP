@@ -37,7 +37,8 @@ import { SchemaForm, initialValues, editValues, buildPayload } from './SchemaFor
  *    function of { reload, toast, rows, openCreate }; `openCreate(values, note)`
  *    opens the create modal prefilled with `values` and `note` shown above the form
  *  - rowsTransform: optional transform of fetched rows (filter/sort/enrich)
- *  - summary: (rows) => node  rendered above the table (stat tiles, charts)
+ *  - summary: (rows, allRows) => node  rendered above the table (stat tiles, charts); `rows` are the
+ *    rows shown after rowsTransform, `allRows` everything fetched
  *  - modalSize: 'sm' | 'md' | 'lg'
  *  - onRows: (rows) => void   notified whenever the list loads
  */
@@ -195,7 +196,7 @@ export default function ResourceSection({
         </div>
       </div>
 
-      {summary && !error && !loading && rows.length > 0 && summary(displayRows)}
+      {summary && !error && !loading && rows.length > 0 && summary(displayRows, rows)}
 
       {error ? (
         <div className="empty-state">
