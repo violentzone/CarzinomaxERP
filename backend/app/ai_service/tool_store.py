@@ -457,8 +457,8 @@ class ProductDetail(BaseModel):
     sku: str
     name: str
     description: str | None
-    unit_price: float
-    cost: float
+    application_price: float | None
+    margin: float | None
     created_at: datetime
     updated_at: datetime
 
@@ -505,17 +505,17 @@ def create_product(
     sku: str,
     name: str,
     description: str | None = None,
-    unit_price: float = 0.0,
-    cost: float = 0.0,
+    application_price: float = 0.0,
+    margin: float = 0.0,
 ) -> ProductDetail:
     """
-    Creates a new product into database table "products"
+    Creates a new product (an application) into database table "products"
     Args:
         sku: Stock keeping unit code, must not already exist
         name: Product name
         description: Product description, None if not given
-        unit_price: Selling price per unit, defaults to 0
-        cost: Purchase cost per unit, defaults to 0
+        application_price: Selling price of the application, defaults to 0
+        margin: Margin of the application as an amount, defaults to 0
 
     Returns:
         The created product record
@@ -525,7 +525,7 @@ def create_product(
         if existing_product is not None:
             raise ValueError(f'Product with sku {sku} already exists')
 
-        product = Product(sku=sku, name=name, description=description, unit_price=unit_price, cost=cost)
+        product = Product(sku=sku, name=name, description=description, application_price=application_price, margin=margin)
         session.add(product)
         session.commit()
         session.refresh(product)
@@ -538,18 +538,18 @@ def update_product(
     sku: str | None = None,
     name: str | None = None,
     description: str | None = None,
-    unit_price: float | None = None,
-    cost: float | None = None,
+    application_price: float | None = None,
+    margin: float | None = None,
 ) -> ProductDetail:
     """
-    Updates an existing product in database table "products", only fields that is not None are changed
+    Updates an existing product (an application) in database table "products", only fields that is not None are changed
     Args:
         product_id: ID of the product to update
         sku: New SKU, must not be used by another product, None if not change
         name: New product name, None if not change
         description: New description, None if not change
-        unit_price: New selling price per unit, None if not change
-        cost: New purchase cost per unit, None if not change
+        application_price: New selling price of the application, None if not change
+        margin: New margin amount, None if not change
 
     Returns:
         The updated product record
@@ -567,10 +567,10 @@ def update_product(
             product.name = name
         if description is not None:
             product.description = description
-        if unit_price is not None:
-            product.unit_price = unit_price
-        if cost is not None:
-            product.cost = cost
+        if application_price is not None:
+            product.application_price = application_price
+        if margin is not None:
+            product.margin = margin
         session.commit()
         session.refresh(product)
 

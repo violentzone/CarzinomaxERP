@@ -28,8 +28,8 @@ How many expense unpaid and their total, how many of them overdue and their tota
 
 ## SCM
 How many product
-Average unit price, average cost and average margin
-How many product priced below cost
+Average application price and average margin
+How many product with a negative margin
 How many product without description
 
 ## Dev Tracking

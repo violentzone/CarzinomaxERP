@@ -94,7 +94,7 @@ export default function Dashboard() {
     paychecks && { label: 'Payroll paid', value: payrollPaid, format: compactCurrency, icon: HandCoins, hint: payrollDraft ? `${compactCurrency(payrollDraft)} in draft` : `${paychecks.length} paychecks` },
     users && { label: 'Team', value: activeUsers, icon: Users, hint: users.length !== activeUsers ? `${users.length - activeUsers} inactive` : 'active members' },
     expenses && !users && { label: 'Ledger entries', value: expenses.length, icon: BookOpen, hint: 'typed expenses' },
-    products && !investments && { label: 'Catalog items', value: products.length, icon: Boxes, hint: 'purchase items' },
+    products && !investments && { label: 'Catalog items', value: products.length, icon: Boxes, hint: 'applications' },
   ]
     .filter(Boolean)
     .slice(0, 4)

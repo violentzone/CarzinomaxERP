@@ -133,7 +133,7 @@ token) clears the session and returns you to the login screen.
   The Overview tab pulls its totals from paychecks, the product catalog and the
   ledger (project investments are the ledger's investment expenses with a project),
   showing only what your flags allow.
-- **Purchases** — the SCM router is a product catalog (SKU, cost, list price).
+- **Purchases** — the SCM router is a product catalog where each product is an application (SKU, price, margin).
 - **Assistant** — the chat drawer (topbar button) streams the orchestrator's reply;
   deletes pause for your approval. The paperclip or a pasted image attaches
   PNG / JPEG / WebP / PDF files (5 per message, 10 MB each, one image); they upload first

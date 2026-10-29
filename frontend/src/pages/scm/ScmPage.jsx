@@ -6,22 +6,14 @@ import { Input } from '../../components/ui/Field'
 import { scmApi } from '../../api/scm'
 import { num, currency, dateTime } from '../../lib/format'
 
-/** Purchases: the catalog of things the unit buys or sells, with cost vs list price. */
+/** Purchases: the catalog of applications the unit sells, with price and margin. */
 export default function ScmPage() {
   const [query, setQuery] = useState('')
 
-  const margin = (r) => {
-    const price = num(r.unit_price)
-    const cost = num(r.cost)
-    if (!price) return null
-    return ((price - cost) / price) * 100
-  }
-
   const summary = (rows) => {
-    const cost = rows.reduce((s, r) => s + num(r.cost), 0)
-    const list = rows.reduce((s, r) => s + num(r.unit_price), 0)
-    const margins = rows.map(margin).filter((m) => m !== null)
-    const avg = margins.length ? margins.reduce((s, m) => s + m, 0) / margins.length : null
+    const price = rows.reduce((s, r) => s + num(r.application_price), 0)
+    const margins = rows.filter((r) => r.margin !== null && r.margin !== undefined)
+    const margin = margins.length ? margins.reduce((s, r) => s + num(r.margin), 0) : null
     return (
       <div className="summary-row">
         <div className="summary-tile accent">
@@ -29,18 +21,14 @@ export default function ScmPage() {
           <span className="sum-v">{rows.length}</span>
         </div>
         <div className="summary-tile">
-          <span className="sum-k">Total unit cost</span>
-          <span className="sum-v">{currency(cost)}</span>
-          <span className="sum-hint">one of each item</span>
+          <span className="sum-k">Total price value</span>
+          <span className="sum-v">{currency(price)}</span>
+          <span className="sum-hint">one of each application</span>
         </div>
         <div className="summary-tile">
-          <span className="sum-k">Total list value</span>
-          <span className="sum-v">{currency(list)}</span>
-        </div>
-        <div className="summary-tile">
-          <span className="sum-k">Avg. margin</span>
-          <span className="sum-v">{avg === null ? '—' : `${avg.toFixed(1)}%`}</span>
-          <span className="sum-hint">(price − cost) / price</span>
+          <span className="sum-k">Total margin</span>
+          <span className="sum-v">{margin === null ? '—' : currency(margin)}</span>
+          <span className="sum-hint">sum of stored margins</span>
         </div>
       </div>
     )
@@ -50,14 +38,14 @@ export default function ScmPage() {
     <div className="module-page">
       <PageHeader
         title="Purchases"
-        subtitle="Products and purchase items with SKU, cost and list price."
+        subtitle="Applications with SKU, price and margin."
         icon={Boxes}
       />
 
       <div className="tab-panel">
         <ResourceSection
           title="Product catalog"
-          subtitle="Everything the unit buys or sells."
+          subtitle="Every application the unit sells."
           moduleName="Purchases"
           fetcher={() => scmApi.listProducts()}
           create={scmApi.createProduct}
@@ -68,7 +56,7 @@ export default function ScmPage() {
           remove={(row) => scmApi.deleteProduct(row.id)}
           removeLabel="product"
           removeHint={(r) => `${r.sku} · ${r.name}`}
-          emptyHint="Add the first product or purchase item."
+          emptyHint="Add the first application."
           emptyIcon={Package}
           summary={summary}
           rowsTransform={(rows) => {
@@ -95,18 +83,17 @@ export default function ScmPage() {
                 </div>
               ),
             },
-            { key: 'cost', header: 'Cost', align: 'right', render: (r) => <span className="cell-num">{currency(r.cost)}</span> },
-            { key: 'unit_price', header: 'List price', align: 'right', render: (r) => <span className="cell-num">{currency(r.unit_price)}</span> },
+            { key: 'application_price', header: 'Price', align: 'right', render: (r) => <span className="cell-num">{currency(r.application_price)}</span> },
             {
               key: 'margin',
               header: 'Margin',
               align: 'right',
               render: (r) => {
-                const m = margin(r)
-                if (m === null) return <span className="muted">—</span>
+                if (r.margin === null || r.margin === undefined) return <span className="muted">—</span>
+                const m = num(r.margin)
                 return (
                   <span className="cell-num" style={{ color: m < 0 ? 'var(--danger)' : m > 0 ? 'var(--success)' : 'inherit' }}>
-                    {m.toFixed(1)}%
+                    {currency(m)}
                   </span>
                 )
               },
@@ -114,10 +101,10 @@ export default function ScmPage() {
             { key: 'updated_at', header: 'Updated', render: (r) => <span className="muted">{dateTime(r.updated_at)}</span> },
           ]}
           fields={[
-            { key: 'sku', label: 'SKU', required: true, placeholder: 'LAP-001' },
-            { key: 'name', label: 'Name', required: true, placeholder: 'Laptop, 16"' },
-            { key: 'cost', label: 'Unit cost', type: 'number', step: '0.01', min: 0, default: 0, hint: 'What the unit pays.' },
-            { key: 'unit_price', label: 'List price', type: 'number', step: '0.01', min: 0, default: 0, hint: 'What it is sold or valued at.' },
+            { key: 'sku', label: 'SKU', required: true, placeholder: 'APP-001' },
+            { key: 'name', label: 'Name', required: true, placeholder: 'Invoice scanner' },
+            { key: 'application_price', label: 'Price', type: 'number', step: '0.01', min: 0, default: 0, hint: 'What the application is sold at.' },
+            { key: 'margin', label: 'Margin', type: 'number', step: '0.01', default: 0, hint: 'Margin as an amount; may be negative.' },
             { key: 'description', label: 'Description', type: 'textarea', full: true, nullable: true },
           ]}
         />

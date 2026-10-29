@@ -38,7 +38,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * Frontend: the ledger has a "Book from receipt" button (file picker → `POST /finance/receipt` → the create modal opens prefilled with the draft and a note; Save posts the normal create with `receipt_path`), a payment-status filter, unpaid / overdue tiles, a "Planned payment date" field (shown as a sub-line under Due), and the overview shows the ledger total and unpaid bills with "n to pay today". Dates in the draft fill the form as they are; `paid_date` is set to the document date when `paid` is true; the draft never proposes a planned payment date. The **Payments** tab (`PaymentsSection` in `FinancePage.jsx`) is the accountant's worklist: unpaid bills with `planned_pay_date` today or earlier (missed ones badged), with Upcoming (7 days) and Unplanned views, tiles computed from every row via `ResourceSection`'s `summary(shown, all)`, a "Mark paid" row action (`PUT` with `paid_date` = today) and an Edit modal limited to the planned and paid dates. Paying happens outside the system. A row with a `receipt_path` is clickable (vendor name, plus a paperclip row action): `ReceiptModal` fetches the file with the bearer token (`apiGetBlob`) and shows it through an object URL, an image inline or a PDF in a frame, with an "Open in new tab" link.
 
 ### 5. Purchases / SCM ([models/scm.py](backend/app/models/scm.py), [api/v1/scm.py](backend/app/api/v1/scm.py))
-* Minimal. `Product` (sku, name, description, unit_price, cost). No vendors, warehouses or purchase orders.
+* Minimal. `Product` is an application: `sku`, `name`, `description`, `application_price` (Numeric 15,2, nullable), `margin` (Numeric 15,2, nullable; a stored amount the client sends, nothing derives it). REST and chat create default both to 0 when omitted; update (REST and chat) leaves `None` unchanged (no clearing). Chat tools `get_products` / `create_product` / `update_product` on `scm_helper`, `delete_product` on the orchestrator. No vendors, warehouses or purchase orders.
 
 ### 6. LLM model ([ai_service/agents.py](backend/app/ai_service/agents.py))
 * The live model object is `llm`, a module-level `ChatLiteLLM` in `agents.py` (re-exported from `app.ai_service`). It is built from `LLM_MODEL` / `LLM_API_KEY`, and `LLM_API_BASE` only when `LLM_TYPE == 'local'`.
@@ -77,7 +77,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * `app/middleware/` is an empty package; `langgraph-supervisor` is in `pyproject.toml` but never imported.
 * `backend/README.md` is empty.
 * `GithubRepo` has REST endpoints but no chat tool (owner decision; add one in `tool_store.py` on request).
-* An existing database does not get the new finance columns from Alembic (single baseline edited in place): recreate it, or add the columns by hand.
+* An existing database does not get the new finance columns or the renamed `products` columns (`application_price`, `margin` replaced `unit_price`, `cost`) from Alembic (single baseline edited in place): recreate it, or change the columns by hand.
 
 ---
 

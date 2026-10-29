@@ -85,7 +85,7 @@ export default function FinanceOverview() {
   const payrollPaid = (paychecks || []).filter((p) => p.status === 'paid').reduce((s, p) => s + num(p.net_pay), 0)
   const payrollDraft = (paychecks || []).filter((p) => p.status !== 'paid').reduce((s, p) => s + num(p.net_pay), 0)
   const devSpend = (investments || []).reduce((s, i) => s + num(i.amount), 0)
-  const catalogCost = (products || []).reduce((s, p) => s + num(p.cost), 0)
+  const catalogValue = (products || []).reduce((s, p) => s + num(p.application_price), 0)
   const ledgerTotal = (expenses || []).reduce((s, e) => s + num(e.amount), 0)
   const unpaid = (expenses || []).filter((e) => !isPaid(e))
   const overdue = unpaid.filter(isOverdue)
@@ -132,7 +132,7 @@ export default function FinanceOverview() {
   const stats = [
     paychecks && { label: 'Payroll paid', value: payrollPaid, format: compactCurrency, icon: HandCoins, hint: payrollDraft ? `${currency(payrollDraft)} still in draft` : `${paychecks.length} paychecks` },
     investments && { label: 'Project investments', value: devSpend, format: compactCurrency, icon: Cloud, hint: `${investments.length} entries` },
-    products && { label: 'Purchase catalog cost', value: catalogCost, format: compactCurrency, icon: Boxes, hint: `${products.length} items` },
+    products && { label: 'Catalog price value', value: catalogValue, format: compactCurrency, icon: Boxes, hint: `${products.length} items` },
     expenses && { label: 'Expense ledger', value: ledgerTotal, format: compactCurrency, icon: BookOpen, hint: `${expenses.length} expenses booked` },
     expenses && { label: 'Unpaid bills', value: unpaid.reduce((s, e) => s + num(e.amount), 0), format: compactCurrency, icon: AlertTriangle, hint: [overdue.length ? `${overdue.length} overdue · ${currency(overdue.reduce((s, e) => s + num(e.amount), 0))}` : `${unpaid.length} open, none overdue`, toPayToday.length ? `${toPayToday.length} to pay today` : null].filter(Boolean).join(' · ') },
   ].filter(Boolean)

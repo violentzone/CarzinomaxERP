@@ -102,8 +102,8 @@ def upgrade() -> None:
     sa.Column('sku', sa.String(length=100), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('unit_price', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('cost', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('application_price', sa.Numeric(precision=15, scale=2), nullable=True),
+    sa.Column('margin', sa.Numeric(precision=15, scale=2), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')

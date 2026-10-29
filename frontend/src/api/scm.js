@@ -1,8 +1,8 @@
 /**
  * Supply Chain endpoints: /api/v1/scm
  *
- * The SCM module is a product / purchase catalog: SKU, name, description,
- * list price and unit cost.
+ * The SCM module is a product catalog where each product is an application:
+ * SKU, name, description, application price and margin.
  */
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 

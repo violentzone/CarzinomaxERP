@@ -77,16 +77,16 @@ class CreateProduct(BaseModel):
     sku: str
     name: str
     description: str | None = None
-    unit_price: Decimal | None = Decimal("0.0")
-    cost: Decimal | None = Decimal("0.0")
+    application_price: Decimal | None = Decimal("0.0")
+    margin: Decimal | None = Decimal("0.0")
 
 
 class UpdateProduct(BaseModel):
     sku: str | None = None
     name: str | None = None
     description: str | None = None
-    unit_price: Decimal | None = None
-    cost: Decimal | None = None
+    application_price: Decimal | None = None
+    margin: Decimal | None = None
 
 
 @scm_router.post("/product")
@@ -116,8 +116,8 @@ async def create_product(new_product: CreateProduct, current_user: User = Depend
             sku=new_product.sku,
             name=new_product.name,
             description=new_product.description,
-            unit_price=new_product.unit_price if new_product.unit_price is not None else Decimal("0.0"),
-            cost=new_product.cost if new_product.cost is not None else Decimal("0.0"),
+            application_price=new_product.application_price if new_product.application_price is not None else Decimal("0.0"),
+            margin=new_product.margin if new_product.margin is not None else Decimal("0.0"),
         )
         db.add(product)
         await db.commit()

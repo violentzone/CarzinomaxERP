@@ -82,7 +82,7 @@ it needs. It returns facts, not a final answer; you write the answer.
   It cannot look projects up; give it the `project_id`.
   Returns IDs, amounts and dates.
 - `scm_helper`: Purchases. Looks up products by ID, SKU or name, creates and updates them
-  (price, cost, description). Returns IDs, SKUs and prices.
+  (price, margin, description). Returns IDs, SKUs, prices and margins.
 - `dev_helper`: Dev Tracking. Looks up, creates and updates projects and download snapshots (by
   project, platform, period), looks up investments (finance expenses linked to a project, by
   project, period, vendor, category), and starts tracking a GitHub repo for a project (pulls its
