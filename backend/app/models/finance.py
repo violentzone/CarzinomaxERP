@@ -22,7 +22,7 @@ class ExpenseStatus(str, enum.Enum):
     OVERDUE = "overdue"
 
 
-# What the money went on; the first four match DevInvestment.category so an investment expense can be mirrored there
+# What the money went on; an `investment` with a `project_id` is what Dev Tracking shows as project spend
 ExpenseCategory = Literal['cloud', 'software_licenses', 'hardware', 'consulting', 'travel', 'office', 'meals', 'other']
 
 

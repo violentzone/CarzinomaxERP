@@ -7,12 +7,11 @@ from typing import Literal
 from uuid import UUID
 
 from app.core.database import SyncSessionLocal
-from app.core.finance import investment_from_expense
 from app.core.github import fetch_repo_stats_once, parse_repo_full_name
 from app.core.security import get_password_hash
 from app.core.uploads import UPLOAD_ROOT, attachment_path
 from app.models.auth import User
-from app.models.dev_tracking import DevInvestment, DevProject, GithubRepo, ProjectDownload
+from app.models.dev_tracking import DevProject, GithubRepo, ProjectDownload
 from app.models.finance import ExpenseCategory, ExpenseType, Finance, ExpenseStatus
 from app.models.hr import AttendanceLog, Department, LeaveRequest, Paycheck
 from app.models.scm import Product
@@ -308,7 +307,7 @@ def create_expense(
     attachment_id: str | None = None,
 ) -> ExpenseDetail:
     """
-    Creates a new expense record into database table "finance"; `status` is derived from `paid_date` and `due_date`, an investment linked to a project is mirrored as a dev investment
+    Creates a new expense record into database table "finance"; `status` is derived from `paid_date` and `due_date`, an investment with a project is what Dev Tracking shows as project spend
     Args:
         expense_type: Type of the expense to create
         amount: Amount of the expense to create
@@ -335,7 +334,6 @@ def create_expense(
             project = session.get(DevProject, project_id)
             if project is None:
                 raise ValueError(f'Dev project with id {project_id} not found')
-        # The date is set here because the investment mirror reads it before the flush
         expense = Finance(expense_type=ExpenseType(expense_type), amount=amount, vendor=vendor, reference=reference, description=description, category=category, expense_date=expense_date or date_type.today(), due_date=due_date, paid_date=paid_date, project_id=project_id, receipt_path=receipt_path)
         if expense.paid_date is not None:
             expense.status = ExpenseStatus.PAID
@@ -344,9 +342,6 @@ def create_expense(
         else:
             expense.status = ExpenseStatus.UNPAID
         session.add(expense)
-        investment = investment_from_expense(expense)
-        if investment:
-            session.add(investment)
         session.commit()
         session.refresh(expense)
 
@@ -367,7 +362,7 @@ def update_expense(
     project_id: int | None = None,
 ) -> ExpenseDetail:
     """
-    Updates an existing expense record in database table "finance", only fields that is not None are changed and `status` is re-derived from the dates; a mirrored dev investment is not updated
+    Updates an existing expense record in database table "finance", only fields that is not None are changed and `status` is re-derived from the dates
     Args:
         expense_id: UUID of the expense to update
         expense_type: New type of the expense, None if not change
@@ -679,7 +674,7 @@ def update_dev_project(
 @tool
 def delete_dev_project(project_id: int) -> DeleteOutput:
     """
-    Deletes a dev project from database table "dev_projects", investments and download snapshots of the project are deleted with it
+    Deletes a dev project from database table "dev_projects", download snapshots and tracked repos of the project are deleted with it; its expenses stay in Finance without a project
     Args:
         project_id: ID of the project to delete
 
@@ -695,19 +690,8 @@ def delete_dev_project(project_id: int) -> DeleteOutput:
 
     return DeleteOutput(id=project_id, message=f'Dev project {project_id} deleted')
 
-class DevInvestmentDetail(BaseModel):
-    id: int
-    date: date_type
-    project_id: int
-    amount: float
-    vendor: str | None
-    category: str
-    description: str | None
-    created_at: datetime
-    updated_at: datetime
-
 class GetDevInvestmentOutput(BaseModel):
-    investment_detail: list[DevInvestmentDetail]
+    investment_detail: list[ExpenseDetail]
     total: float
 
 @tool
@@ -719,28 +703,28 @@ def get_dev_investment(
     category: str | None = None,
 ) -> GetDevInvestmentOutput | None:
     """
-    Gets dev investment data from database table "dev_investments", filtered by parameters that is not None
+    Gets the investment expenses booked against a dev project from database table "finance" (`expense_type` investment with a `project_id`), filtered by parameters that is not None
     Args:
         project_id: Project ID the investments belong to, None if not filter by project
-        start_date: Start period to query investments (inclusive, by date), None if not filter by start date
-        end_date: End period to query investments (inclusive, by date), None if not filter by end date
+        start_date: Start period to query investments (inclusive, by expense date), None if not filter by start date
+        end_date: End period to query investments (inclusive, by expense date), None if not filter by end date
         vendor: Vendor of the investments (e.g. AWS, GCP, Vercel), None if not filter by vendor
-        category: Category of the investments (e.g. cloud, software_licenses, hardware, consulting), None if not filter by category
+        category: Category of the investments (cloud, software_licenses, hardware, consulting, travel, office, meals, other), None if not filter by category
 
     Returns:
-        Dev investment data, each investment listed in `GetDevInvestmentOutput.investment_detail` with summed amount in `total`, None if no investments found with filter given
+        Investment expenses, each listed in `GetDevInvestmentOutput.investment_detail` with summed amount in `total`, None if no investments found with filter given
     """
-    stmt = select(DevInvestment)
+    stmt = select(Finance).where(Finance.expense_type == ExpenseType.INVESTMENT, Finance.project_id.is_not(None))
     if project_id is not None:
-        stmt = stmt.where(DevInvestment.project_id == project_id)
+        stmt = stmt.where(Finance.project_id == project_id)
     if start_date is not None:
-        stmt = stmt.where(DevInvestment.date >= start_date)
+        stmt = stmt.where(Finance.expense_date >= start_date)
     if end_date is not None:
-        stmt = stmt.where(DevInvestment.date <= end_date)
+        stmt = stmt.where(Finance.expense_date <= end_date)
     if vendor is not None:
-        stmt = stmt.where(DevInvestment.vendor == vendor)
+        stmt = stmt.where(Finance.vendor == vendor)
     if category is not None:
-        stmt = stmt.where(DevInvestment.category == category)
+        stmt = stmt.where(Finance.category == category)
 
     with SyncSessionLocal() as session:
         investments = (session.execute(stmt)).scalars().all()
@@ -749,117 +733,9 @@ def get_dev_investment(
         return None
     total = float(sum(i.amount for i in investments))
     return GetDevInvestmentOutput(
-        investment_detail=[DevInvestmentDetail.model_validate(i, from_attributes=True) for i in investments],
+        investment_detail=[ExpenseDetail.model_validate(i, from_attributes=True) for i in investments],
         total=total,
     )
-
-@tool
-def create_dev_investment(
-    project_id: int,
-    date: date_type,
-    amount: float,
-    category: Literal["cloud", "software_licenses", "hardware", "consulting", "other"] = "cloud",
-    vendor: str | None = None,
-    description: str | None = None,
-) -> DevInvestmentDetail:
-    """
-    Creates a new dev investment into database table "dev_investments"
-    Args:
-        project_id: ID of the project the investment belongs to, must exist
-        date: Date of the investment
-        amount: Amount of the investment
-        category: Category of the investment, defaults to cloud
-        vendor: Vendor of the investment (e.g. AWS, GCP, Vercel), None if not given
-        description: Description of the investment, None if not given
-
-    Returns:
-        The created dev investment record
-    """
-    with SyncSessionLocal() as session:
-        project = session.get(DevProject, project_id)
-        if project is None:
-            raise ValueError(f'Dev project with id {project_id} not found')
-
-        investment = DevInvestment(
-            project_id=project_id,
-            date=date,
-            amount=amount,
-            category=category,
-            vendor=vendor,
-            description=description,
-        )
-        session.add(investment)
-        session.commit()
-        session.refresh(investment)
-
-    return DevInvestmentDetail.model_validate(investment, from_attributes=True)
-
-@tool
-def update_dev_investment(
-    investment_id: int,
-    project_id: int | None = None,
-    date: date_type | None = None,
-    amount: float | None = None,
-    category: Literal["cloud", "software_licenses", "hardware", "consulting", "other"] | None = None,
-    vendor: str | None = None,
-    description: str | None = None,
-) -> DevInvestmentDetail:
-    """
-    Updates an existing dev investment in database table "dev_investments", only fields that is not None are changed
-    Args:
-        investment_id: ID of the investment to update
-        project_id: New project ID the investment belongs to, must exist, None if not change
-        date: New date of the investment, None if not change
-        amount: New amount of the investment, None if not change
-        category: New category of the investment, None if not change
-        vendor: New vendor of the investment, None if not change
-        description: New description of the investment, None if not change
-
-    Returns:
-        The updated dev investment record
-    """
-    with SyncSessionLocal() as session:
-        investment = session.get(DevInvestment, investment_id)
-        if investment is None:
-            raise ValueError(f'Dev investment with id {investment_id} not found')
-        if project_id is not None:
-            project = session.get(DevProject, project_id)
-            if project is None:
-                raise ValueError(f'Dev project with id {project_id} not found')
-            investment.project_id = project_id
-        if date is not None:
-            investment.date = date
-        if amount is not None:
-            investment.amount = amount
-        if category is not None:
-            investment.category = category
-        if vendor is not None:
-            investment.vendor = vendor
-        if description is not None:
-            investment.description = description
-        session.commit()
-        session.refresh(investment)
-
-    return DevInvestmentDetail.model_validate(investment, from_attributes=True)
-
-@tool
-def delete_dev_investment(investment_id: int) -> DeleteOutput:
-    """
-    Deletes a dev investment from database table "dev_investments"
-    Args:
-        investment_id: ID of the investment to delete
-
-    Returns:
-        ID of the deleted investment with a confirmation message
-    """
-    with SyncSessionLocal() as session:
-        investment = session.get(DevInvestment, investment_id)
-        if investment is None:
-            raise ValueError(f'Dev investment with id {investment_id} not found')
-        session.delete(investment)
-        session.commit()
-
-    return DeleteOutput(id=investment_id, message=f'Dev investment {investment_id} deleted')
 
 class ProjectDownloadDetail(BaseModel):
     id: int

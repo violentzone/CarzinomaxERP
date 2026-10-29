@@ -65,7 +65,7 @@ dev_helper_agent = create_agent(
     system_prompt=load_prompt('dev_helper_prompt.md'),
     tools=[
         tool_store.get_dev_project, tool_store.create_dev_project, tool_store.update_dev_project,
-        tool_store.get_dev_investment, tool_store.create_dev_investment, tool_store.update_dev_investment,
+        tool_store.get_dev_investment,
         tool_store.get_project_downloads, tool_store.create_project_download, tool_store.update_project_download,
         tool_store.create_github_repo,
     ],
@@ -116,7 +116,7 @@ def call_dev_helper_agent(query: str):
 HR_DELETE_TOOLS = [tool_store.delete_user, tool_store.delete_department, tool_store.delete_attendance, tool_store.delete_leave_request, tool_store.delete_paycheck]
 FINANCE_DELETE_TOOLS = [tool_store.delete_expense]
 SCM_DELETE_TOOLS = [tool_store.delete_product]
-DEV_DELETE_TOOLS = [tool_store.delete_dev_project, tool_store.delete_dev_investment, tool_store.delete_project_download]
+DEV_DELETE_TOOLS = [tool_store.delete_dev_project, tool_store.delete_project_download]
 
 
 def caller_context(caller: User) -> str:

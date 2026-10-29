@@ -147,7 +147,7 @@ function LedgerSection() {
     { key: 'category', label: 'Category', type: 'select', options: CATEGORY_OPTIONS, nullable: true },
     { key: 'paid_date', label: 'Paid on', type: 'date', nullable: true, hint: 'Leave empty while the bill is open; clearing it re-opens the bill.' },
     ...(projectOptions.length
-      ? [{ key: 'project_id', label: 'Project', type: 'select', numeric: true, full: true, options: projectOptions, placeholder: 'No project', hint: 'An investment linked to a project is also recorded under Dev Tracking.' }]
+      ? [{ key: 'project_id', label: 'Project', type: 'select', numeric: true, full: true, options: projectOptions, placeholder: 'No project', hint: 'An investment linked to a project is shown under Dev Tracking as project spend.' }]
       : []),
     { key: 'description', label: 'Description', type: 'textarea', full: true, nullable: true },
   ]

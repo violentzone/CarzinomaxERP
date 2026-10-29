@@ -12,7 +12,6 @@ from app.models.hr import (
 )
 from app.models.dev_tracking import (
     DevProject,
-    DevInvestment,
     ProjectDownload,
     GithubRepo,
 )
@@ -30,7 +29,6 @@ __all__ = [
     "LeaveRequest",
     "Paycheck",
     "DevProject",
-    "DevInvestment",
     "ProjectDownload",
     "GithubRepo",
 ]

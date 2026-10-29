@@ -1,12 +1,13 @@
 /**
  * Development Tracking endpoints: /api/v1/dev_tracking
  *
- * Note: projects are keyed by `project_id` (not `id`); investments and
- * downloads use `id` and reference a project through `project_id`.
+ * Note: projects are keyed by `project_id` (not `id`); downloads use `id` and
+ * reference a project through `project_id`. Investments are the finance
+ * expenses (UUID `id`, `expense_date`) of type `investment` with a `project_id`;
+ * they are booked and edited on the Finance page, Dev Tracking only lists them.
  */
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 
-export const INVESTMENT_CATEGORIES = ['cloud', 'software_licenses', 'hardware', 'consulting', 'other']
 export const DOWNLOAD_PLATFORMS = ['github', 'dockerhub', 'npm', 'pypi', 'other']
 
 export const devApi = {
@@ -17,10 +18,6 @@ export const devApi = {
   deleteProject: (id) => apiDelete(`/dev_tracking/project/${id}`),
 
   listInvestments: () => apiGet('/dev_tracking/investment_list'),
-  getInvestment: (id) => apiGet(`/dev_tracking/investment/${id}`),
-  createInvestment: (payload) => apiPost('/dev_tracking/investment', payload),
-  updateInvestment: (id, payload) => apiPut(`/dev_tracking/investment/${id}`, payload),
-  deleteInvestment: (id) => apiDelete(`/dev_tracking/investment/${id}`),
 
   listDownloads: () => apiGet('/dev_tracking/download_list'),
   getDownload: (id) => apiGet(`/dev_tracking/download/${id}`),

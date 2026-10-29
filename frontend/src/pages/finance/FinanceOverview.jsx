@@ -51,15 +51,16 @@ export default function FinanceOverview() {
     let alive = true
     const want = (mod, fn) => (can(mod) ? safe(fn(), null) : Promise.resolve(null))
     ;(async () => {
-      const [expenses, paychecks, users, investments, projects, products] = await Promise.all([
+      const [expenses, paychecks, users, projects, products] = await Promise.all([
         can('finance') ? financeApi.listExpenses().catch((e) => ({ __error: e })) : Promise.resolve(null),
         want('hr', hrApi.listPaychecks),
         want('hr', hrApi.listUsers),
-        want('dev', devApi.listInvestments),
         want('dev', devApi.listProjects),
         want('scm', scmApi.listProducts),
       ])
       if (!alive) return
+      // Investments are the ledger's investment expenses with a project; no dev flag needed to total them
+      const investments = Array.isArray(expenses) ? expenses.filter((e) => e.expense_type === 'investment' && e.project_id != null) : null
       setState({ loading: false, expenses, paychecks, users, investments, projects, products })
     })()
     return () => {
@@ -93,7 +94,7 @@ export default function FinanceOverview() {
   const months = {}
   const bucket = (k) => (months[k] = months[k] || { payroll: 0, investments: 0 })
   for (const p of paychecks || []) bucket(monthKey(p.payment_date)).payroll += num(p.net_pay)
-  for (const i of investments || []) bucket(monthKey(i.date)).investments += num(i.amount)
+  for (const i of investments || []) bucket(monthKey(i.expense_date)).investments += num(i.amount)
   const outflow = Object.keys(months)
     .filter(Boolean)
     .sort()
@@ -117,7 +118,7 @@ export default function FinanceOverview() {
     })),
     ...(investments || []).map((i) => ({
       id: `i${i.id}`,
-      date: i.date,
+      date: i.expense_date,
       kind: 'investment',
       party: i.vendor,
       note: projectMap[String(i.project_id)]?.project_name || `Project #${i.project_id}`,
@@ -137,7 +138,7 @@ export default function FinanceOverview() {
 
   const locked = [
     !paychecks && 'hr',
-    !investments && 'dev',
+    !projects && 'dev',
     !products && 'scm',
   ].filter(Boolean)
 

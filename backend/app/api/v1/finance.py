@@ -15,7 +15,6 @@ from starlette import status
 
 from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
-from app.core.finance import investment_from_expense
 from app.core.log_module import user_log
 from app.core.receipts import extract_receipt
 from app.core.uploads import MIME_BY_EXTENSION, UPLOAD_ROOT, attachment_path, load_attachment, save_attachment
@@ -204,15 +203,10 @@ async def create_expense(new_expense: CreateExpense, current_user: User = Depend
                 raise ValueError(f'Unknown receipt {new_expense.receipt_path}')
             expense.receipt_path = attachment_path(current_user.id, PurePosixPath(parts[1]).stem).relative_to(UPLOAD_ROOT).as_posix()
         db.add(expense)
-        investment = investment_from_expense(expense)
-        if investment:
-            db.add(investment)
         await db.commit()
         await db.refresh(expense)
         expense_data = expense.to_dict()
         log.info(f'[EXPENSE] Expense created: {expense_data}')
-        if investment:
-            log.info(f'[EXPENSE] Expense {expense.id} mirrored as dev investment {investment.id}')
         return JSONResponse({"status": "success", "data": expense_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
     except Exception as err:
         log.error(f'[EXPENSE] Failed to create expense: {format_exc()}')

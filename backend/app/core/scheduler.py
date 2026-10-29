@@ -104,9 +104,10 @@ async def query_dev_tracking_summary(session: AsyncSession) -> dict[str, object]
     project_stmt = select(func.count(distinct(dev_tracking.DevProject.project_id)), func.count(distinct(dev_tracking.DevProject.project_id)).filter(dev_tracking.GithubRepo.id.is_(None))).outerjoin(dev_tracking.GithubRepo, dev_tracking.GithubRepo.project_id == dev_tracking.DevProject.project_id)
     project_count, projects_without_repo = (await session.execute(project_stmt)).one()
     month_start = date.today().replace(day=1)
-    investment_stmt = select(func.coalesce(func.sum(dev_tracking.DevInvestment.amount), 0), func.coalesce(func.sum(dev_tracking.DevInvestment.amount).filter(dev_tracking.DevInvestment.date >= month_start), 0))
+    # An investment is a finance expense of type investment linked to a project
+    investment_stmt = select(func.coalesce(func.sum(finance.Finance.amount), 0), func.coalesce(func.sum(finance.Finance.amount).filter(finance.Finance.expense_date >= month_start), 0)).where(finance.Finance.expense_type == finance.ExpenseType.INVESTMENT, finance.Finance.project_id.is_not(None))
     investment_total, investment_this_month = (await session.execute(investment_stmt)).one()
-    category_stmt = select(dev_tracking.DevInvestment.category, func.sum(dev_tracking.DevInvestment.amount)).group_by(dev_tracking.DevInvestment.category)
+    category_stmt = select(finance.Finance.category, func.sum(finance.Finance.amount)).where(finance.Finance.expense_type == finance.ExpenseType.INVESTMENT, finance.Finance.project_id.is_not(None)).group_by(finance.Finance.category)
     investment_per_category = {category: float(total) for category, total in (await session.execute(category_stmt)).all()}
     repo_stmt = select(func.count(dev_tracking.GithubRepo.id), func.coalesce(func.sum(dev_tracking.GithubRepo.star_count), 0), func.coalesce(func.sum(dev_tracking.GithubRepo.download_count), 0), func.max(dev_tracking.GithubRepo.last_synced_at), func.count(dev_tracking.GithubRepo.id).filter(dev_tracking.GithubRepo.last_error.is_not(None)))
     repo_count, repo_star_total, repo_download_total, last_github_sync, repos_with_sync_error = (await session.execute(repo_stmt)).one()

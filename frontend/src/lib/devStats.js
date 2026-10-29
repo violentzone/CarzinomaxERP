@@ -37,7 +37,7 @@ export function projectStats(projects = [], investments = [], downloads = []) {
     const s = ensure(inv.project_id)
     s.spend += num(inv.amount)
     s.investmentCount += 1
-    bump(s, inv.date)
+    bump(s, inv.expense_date)
   }
 
   // latest snapshot per (project, platform)

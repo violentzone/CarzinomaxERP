@@ -106,7 +106,7 @@ export default function Dashboard() {
   const months = {}
   const bucket = (k) => (months[k] = months[k] || { payroll: 0, investments: 0 })
   for (const p of paychecks || []) bucket(monthKey(p.payment_date)).payroll += num(p.net_pay)
-  for (const i of investments || []) bucket(monthKey(i.date)).investments += num(i.amount)
+  for (const i of investments || []) bucket(monthKey(i.expense_date)).investments += num(i.amount)
   const outflow = Object.keys(months)
     .filter(Boolean)
     .sort()

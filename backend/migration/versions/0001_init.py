@@ -155,20 +155,6 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_dev_github_repos_full_name'), 'dev_github_repos', ['full_name'], unique=True)
     op.create_index(op.f('ix_dev_github_repos_id'), 'dev_github_repos', ['id'], unique=False)
-    op.create_table('dev_investments',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('date', sa.Date(), nullable=False),
-    sa.Column('project_id', sa.Integer(), nullable=False),
-    sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
-    sa.Column('vendor', sa.String(length=255), nullable=True),
-    sa.Column('category', sa.String(length=100), nullable=False),
-    sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['project_id'], ['dev_projects.project_id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_dev_investments_id'), 'dev_investments', ['id'], unique=False)
     op.create_table('dev_project_downloads',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('project_id', sa.Integer(), nullable=False),
@@ -229,8 +215,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_dev_project_downloads_id'), table_name='dev_project_downloads')
     op.drop_index(op.f('ix_dev_project_downloads_date'), table_name='dev_project_downloads')
     op.drop_table('dev_project_downloads')
-    op.drop_index(op.f('ix_dev_investments_id'), table_name='dev_investments')
-    op.drop_table('dev_investments')
     op.drop_index(op.f('ix_dev_github_repos_id'), table_name='dev_github_repos')
     op.drop_index(op.f('ix_dev_github_repos_full_name'), table_name='dev_github_repos')
     op.drop_table('dev_github_repos')

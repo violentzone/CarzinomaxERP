@@ -1,9 +1,8 @@
 """
-Dev tracking module, Query, add, remove and update DevProject, DevInvestment, ProjectDownload and GithubRepo
+Dev tracking module, Query, add, remove and update DevProject, ProjectDownload and GithubRepo, and list the investment expenses booked against a project
 (tracked repos whose stars / release downloads are pulled when added and refreshed by the scheduler and POST /github_sync)
 """
 from datetime import date as date_type
-from decimal import Decimal
 from traceback import format_exc
 
 from fastapi import Depends, APIRouter
@@ -17,7 +16,7 @@ from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
 from app.core.github import parse_repo_full_name, sync_github_repos
 from app.core.log_module import user_log
-from app.models import DevInvestment, DevProject, GithubRepo, ProjectDownload, User
+from app.models import DevProject, ExpenseType, Finance, GithubRepo, ProjectDownload, User
 
 dev_tracking_router = APIRouter(prefix="/dev_tracking", tags=["Dev Tracking"])
 
@@ -159,7 +158,7 @@ async def update_project(project_id: int, new_project: UpdateProject, current_us
 @dev_tracking_router.delete("/project/{project_id}")
 async def delete_project(project_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
-    Delete dev project by id
+    Delete dev project by id, its download snapshots and tracked repos go with it; its expenses stay in Finance without a project
     Args:
         project_id: Dev project ID to delete
         current_user: Signed in user
@@ -189,196 +188,35 @@ async def delete_project(project_id: int, current_user: User = Depends(get_curre
 
 
 # ---------------------------------------------------------------------------
-# DevInvestment
+# Investments (finance rows)
 # ---------------------------------------------------------------------------
 
 @dev_tracking_router.get("/investment_list")
 async def get_investment_list(current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
-    Get all dev investments in the database.
+    Get the investment expenses booked against a dev project: `finance` rows with `expense_type` investment and a `project_id`
     Args:
         current_user: Signed in user
         db: Database session(Created by `get_db`)
 
     Returns:
-        Jsonified list of DevInvestment objects
+        Jsonified list of Finance objects
     """
     log = user_log(current_user.id)
     if not await permission_check('dev', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info('[INVESTMENT] Query all dev investments')
-    investments = (await db.scalars(select(DevInvestment))).all()
+    log.info('[INVESTMENT] Query investment expenses linked to a project')
+    stmt = select(Finance).where(Finance.expense_type == ExpenseType.INVESTMENT, Finance.project_id.is_not(None))
+    investments = (await db.scalars(stmt)).all()
     data = []
     for i in investments:
         data.append(i.to_dict())
-    log.info(f"[INVESTMENT] {str(len(data))} dev investments found")
+    log.info(f'[INVESTMENT] {str(len(data))} investment expenses found')
 
     return JSONResponse({
         "status": "success",
         "data": data,
     }, status_code=status.HTTP_200_OK, media_type='application/json')
-
-
-@dev_tracking_router.get("/investment/{investment_id}")
-async def get_investment(investment_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
-    """
-    Get dev investment by id
-    Args:
-        investment_id: The dev investment to query
-        current_user: Signed in user
-        db: Database session(Created by `get_db`)
-
-    Returns:
-        Jsonified DevInvestment object
-    """
-    log = user_log(current_user.id)
-    if not await permission_check('dev', current_user.id, db):
-        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'[INVESTMENT] Query dev investment ID: {investment_id}')
-
-    investment = await db.get(DevInvestment, investment_id)
-    if not investment:
-        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
-        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
-
-    investment_data = investment.to_dict()
-    log.info(f'[INVESTMENT] Query dev investment: {investment_data}')
-
-    return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_200_OK, media_type='application/json')
-
-
-class CreateInvestment(BaseModel):
-    project_id: int
-    amount: Decimal
-    vendor: str | None = None
-    category: str | None = "cloud"
-    description: str | None = None
-    date: date_type
-
-
-class UpdateInvestment(BaseModel):
-    project_id: int | None = None
-    amount: Decimal | None = None
-    vendor: str | None = None
-    category: str | None = None
-    description: str | None = None
-    date: date_type | None = None
-
-
-@dev_tracking_router.post("/investment")
-async def create_investment(new_investment: CreateInvestment, current_user: User = Depends(get_current_user), db = Depends(get_db)):
-    """
-    Create a new dev investment
-    Args:
-        new_investment: New dev investment information
-        current_user: Signed in user
-        db: Database session(Created by `get_db`)
-
-    Returns:
-        Response body: {'status': 'success', 'data': investment}/{'status': 'fail', 'error': error message}
-    """
-    log = user_log(current_user.id)
-    if not await permission_check('dev', current_user.id, db):
-        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'[INVESTMENT] Create dev investment for project ID: {new_investment.project_id}')
-
-    try:
-        project = await db.get(DevProject, new_investment.project_id)
-        if not project:
-            log.warning(f'[INVESTMENT] Dev project ID: {new_investment.project_id} not found')
-            return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
-
-        investment = DevInvestment(
-            date=new_investment.date,
-            project_id=new_investment.project_id,
-            amount=new_investment.amount,
-            vendor=new_investment.vendor,
-            category=new_investment.category if new_investment.category is not None else "cloud",
-            description=new_investment.description,
-        )
-        db.add(investment)
-        await db.commit()
-        await db.refresh(investment)
-        investment_data = investment.to_dict()
-        log.info(f'[INVESTMENT] Dev investment created: {investment_data}')
-        return JSONResponse({"status": "success", "data": investment_data}, status_code=status.HTTP_201_CREATED, media_type='application/json')
-    except Exception as err:
-        log.error(f'[INVESTMENT] Failed to create dev investment: {format_exc()}')
-        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-
-
-@dev_tracking_router.put("/investment/{investment_id}")
-async def update_investment(investment_id: int, new_investment: UpdateInvestment, current_user: User = Depends(get_current_user), db = Depends(get_db)):
-    """
-    Update dev investment by id
-    Args:
-        investment_id: Dev investment ID to update
-        new_investment: New dev investment information
-        current_user: Signed in user
-        db: Database session(Created by `get_db`)
-
-    Returns:
-        Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
-    """
-    log = user_log(current_user.id)
-    if not await permission_check('dev', current_user.id, db):
-        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'[INVESTMENT] Update dev investment ID: {investment_id}')
-
-    old_investment = await db.get(DevInvestment, investment_id)
-    if not old_investment:
-        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
-        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
-
-    if new_investment.project_id is not None:
-        project = await db.get(DevProject, new_investment.project_id)
-        if not project:
-            log.warning(f'[INVESTMENT] Dev project ID: {new_investment.project_id} not found')
-            return JSONResponse({"status": "fail", "error": f"Project with id {new_investment.project_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
-
-    try:
-        for field_name, field_value in new_investment:
-            if field_value is not None:
-                setattr(old_investment, field_name, field_value)
-        await db.commit()
-        await db.refresh(old_investment)
-        log.info(f'[INVESTMENT] Dev investment updated: {old_investment.to_dict()}')
-        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
-    except Exception as err:
-        log.error(f'[INVESTMENT] Failed to update dev investment: {format_exc()}')
-        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-
-
-@dev_tracking_router.delete("/investment/{investment_id}")
-async def delete_investment(investment_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
-    """
-    Delete dev investment by id
-    Args:
-        investment_id: Dev investment ID to delete
-        current_user: Signed in user
-        db: Database session(Created by `get_db`)
-
-    Returns:
-        Response body: {'status': 'success'}/{'status': 'fail', 'error': error message}
-    """
-    log = user_log(current_user.id)
-    if not await permission_check('dev', current_user.id, db):
-        return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'[INVESTMENT] Delete dev investment ID: {investment_id}')
-
-    investment = await db.get(DevInvestment, investment_id)
-    if not investment:
-        log.warning(f'[INVESTMENT] Dev investment ID: {investment_id} not found')
-        return JSONResponse({"status": "fail", "error": f"Investment with id {investment_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
-
-    try:
-        await db.delete(investment)
-        await db.commit()
-        log.info(f'[INVESTMENT] Dev investment deleted ID: {investment_id}')
-        return JSONResponse({"status": "success"}, status_code=status.HTTP_200_OK, media_type='application/json')
-    except Exception as err:
-        log.error(f'[INVESTMENT] Failed to delete dev investment: {format_exc()}')
-        return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
 
 
 # ---------------------------------------------------------------------------
