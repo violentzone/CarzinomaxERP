@@ -29,7 +29,7 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode — emits SQL to stdout, no DB needed."""
     context.configure(
-        url=settings.ASYNC_DATABASE_URL,
+        url='postgresql+asyncpg://admin:OVdj7jx5BC7N@localhost:5500/carzinomax',
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -65,7 +65,7 @@ def _ensure_baseline(connection) -> None:
 
 async def run_async_migrations() -> None:
     cfg = config.get_section(config.config_ini_section, {})
-    cfg["sqlalchemy.url"] = settings.ASYNC_DATABASE_URL
+    cfg["sqlalchemy.url"] = 'postgresql+asyncpg://admin:OVdj7jx5BC7N@localhost:5500/carzinomax'
     connectable = async_engine_from_config(cfg, prefix="sqlalchemy.", poolclass=pool.NullPool)
     # Own transaction, committed before migrations run — alembic manages the
     # migration transaction itself on the second connection.
