@@ -163,7 +163,7 @@ Requires Python 3.14+, PostgreSQL, and [uv](https://github.com/astral-sh/uv). Ru
 
 ```bash
 cd backend
-cp .env.example .env        # fill in ADMIN_DB_CONNECTION, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*, SMTP_* / MAIL_FROM, SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ (+ WEEKDAY or MONTHDAY); optional GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
+cp .env.example .env        # fill in ADMIN_DB_CONNECTION, APP_DB_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*, SMTP_* / MAIL_FROM, SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ (+ WEEKDAY or MONTHDAY); optional APP_DB_USER / GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
 uv sync
 uv run alembic upgrade head # tables are created ONLY by Alembic; startup does not create_all
 uv run uvicorn app.main:app --reload

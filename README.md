@@ -100,7 +100,7 @@ four.
 ## 🧱 Tech stack
 
 - **Backend:** FastAPI (async), Python 3.14, [uv](https://github.com/astral-sh/uv) for dependencies
-- **Database:** PostgreSQL via SQLAlchemy 2.0 (async / asyncpg), migrations with Alembic
+- **Database:** PostgreSQL via SQLAlchemy 2.0 (async / asyncpg), migrations with Alembic run by a database administrator role while the server uses the data-only `carzinomax` role
 - **Auth:** JWT (PyJWT) + bcrypt, per-module access flags, logout-based token revocation
 - **AI:** [litellm](https://github.com/BerriAI/litellm) router — point it at Anthropic, OpenAI, Gemini, or a self-hosted Ollama / OpenAI-compatible server
 - **Scheduling:** APScheduler (async)
@@ -122,6 +122,8 @@ cd carzinomax-dev
 # App settings and secrets — copy the example and fill in your values
 cp backend/.env.example backend/.env
 #   ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
+#   APP_DB_PASSWORD (password of the `carzinomax` database role the first migration creates for the backend, see "Database roles";
+#   optional APP_DB_USER renames it)
 #   SMTP_HOSTNAME / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password)
 #   SUMMARY_SEND_TIME (hour 0-23) / SUMMARY_SEND_FREQ (day|week|month), plus SUMMARY_SEND_WEEKDAY (0-6, Mon=0) for week or SUMMARY_SEND_MONTHDAY (1-31) for month
 #   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
@@ -213,6 +215,29 @@ serves it back and the ledger shows it. Two gaps to know about: a receipt that
 was read but never booked stays on disk with nothing pointing at it, and
 deleting an expense does not delete its file. There is no cleanup job yet.
 
+### 5. Database roles
+
+Two PostgreSQL roles are involved, so the running ERP never holds administrator
+rights on its own database:
+
+| Role | Used by | Rights |
+|------|---------|--------|
+| the database administrator (`POSTGRES_USER` in Docker, the superuser you created locally) | `alembic upgrade head` only | owns the schema; needs `CREATEROLE` |
+| `carzinomax` (`APP_DB_USER` / `APP_DB_PASSWORD` in `backend/.env`) | the backend at runtime: routers, chat tools, scheduler, startup seed | `SELECT` / `INSERT` / `UPDATE` / `DELETE` on every table plus the sequences behind the ids; nothing on the schema itself or on `alembic_version` |
+
+The first migration (`0001_init`) creates `carzinomax` with the password from
+`APP_DB_PASSWORD` and grants it the rights above right after it builds the
+tables. An existing role of that name is kept as it is (roles are cluster-wide),
+and `alembic downgrade base` drops it again unless the migration is connected as
+that very role. `ADMIN_DB_CONNECTION` in `backend/.env` is the URL the backend
+runs with, so it names `carzinomax`; Alembic connects with the administrator's
+URL set in `backend/migration/env.py`.
+
+In the compose stack the backend container runs the migration and the server
+with the same `POSTGRES_USER` URL, and `POSTGRES_USER` defaults to `carzinomax`,
+so the migration finds the role already there and the separation applies to the
+local setup described under "Local development without Docker".
+
 ## 📁 Project structure
 
 ```text
@@ -295,13 +320,13 @@ and a PostgreSQL to point at. The compose database works fine for this:
 ```bash
 cd backend
 cp .env.example .env
-#   Same variables as the Docker setup, but ADMIN_DB_CONNECTION must now be reachable
-#   from the host, e.g. postgresql://carzinomax:carzinomax@localhost:5432/carzinomax
-#   for the compose database (match the POSTGRES_* values in your root .env).
+#   Same variables as the Docker setup. ADMIN_DB_CONNECTION is the URL the backend runs with: the carzinomax
+#   role and APP_DB_PASSWORD, e.g. postgresql://carzinomax:<APP_DB_PASSWORD>@localhost:5432/carzinomax.
+#   Alembic does not use it; it connects as the database administrator through the URL in migration/env.py.
 
 uv sync                       # install dependencies
-uv run alembic upgrade head   # create the schema
-uv run uvicorn app.main:app --reload
+uv run alembic upgrade head   # as the administrator: schema, seeded ERP admin, the carzinomax role and its grants
+uv run uvicorn app.main:app --reload   # runs as carzinomax
 ```
 
 API docs at **http://localhost:8000/docs**. First start seeds the admin user and

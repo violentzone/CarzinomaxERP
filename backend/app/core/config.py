@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # We allow ADMIN_DB_CONNECTION or DATABASE_URL
     DATABASE_URL: Optional[str] = None
     ADMIN_DB_CONNECTION: Optional[str] = None
+
+    # PostgreSQL login role that the baseline migration creates (0001_init `_create_db_role`); the password is
+    # required, sourced from .env, no default so no well-known database credential is hard-coded here
+    APP_DB_USER: str = "carzinomax"
+    APP_DB_PASSWORD: str
     
     # Payroll/Paycheck calculation timespot (cron expression)
     PAYCHECK_CALCULATE_TIMESPOT: str = "0 0 1 * *"
@@ -41,8 +46,8 @@ class Settings(BaseSettings):
 
     # Outgoing mail (app/core/scheduler.py send_email): SMTP with a Google App Password
     # Required, sourced from .env, no defaults so nothing provider-specific is hard-coded here
-    SMTP_HOSTNAME: str                        # e.g. smtp.gmail.com
-    SMTP_PORT: int                            # 587 = STARTTLS, 465 = implicit SSL
+    SMTP_HOSTNAME: str  = "smtp.gmail.com"    # e.g. smtp.gmail.com
+    SMTP_PORT: int = 465                      # 587 = STARTTLS, 465 = implicit SSL
     SMTP_PASSWORD: str                        # the 16-char Google App Password
     MAIL_FROM: str                            # mailbox login and the From address
 
@@ -150,13 +155,8 @@ class Settings(BaseSettings):
             raise ValueError("SUMMARY_SEND_MONTHDAY is required when SUMMARY_SEND_FREQ=month")
         return self
 
+
 settings = Settings()
 # Initialize the computed fields
 if not settings.ASYNC_DATABASE_URL:
-    db_url = settings.DATABASE_URL or settings.ADMIN_DB_CONNECTION or "postgresql://postgres:postgres@localhost:5432/erp"
-    if db_url.startswith("postgresql://"):
-        settings.ASYNC_DATABASE_URL = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif db_url.startswith("postgres://"):
-        settings.ASYNC_DATABASE_URL = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    else:
-        settings.ASYNC_DATABASE_URL = db_url
+    db_url = settings.ADMIN_DB_CONNECTION or "postgresql://postgres:postgres@localhost:5432/erp"
