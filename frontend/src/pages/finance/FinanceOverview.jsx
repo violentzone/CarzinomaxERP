@@ -40,7 +40,7 @@ async function safe(promise, fallback = null) {
 
 /**
  * Money out, across modules: payroll (HR), project investments (dev tracking)
- * and the purchase catalog (SCM), alongside the finance ledger itself. Each
+ * and the product catalog (SCM), alongside the finance ledger itself. Each
  * source is only loaded when the signed-in user holds that module's flag.
  */
 export default function FinanceOverview() {

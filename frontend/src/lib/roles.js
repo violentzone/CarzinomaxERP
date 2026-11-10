@@ -7,7 +7,7 @@
  * for display purposes, an administrator. User management itself lives in the
  * HR router, so the Users page is gated on HR access.
  */
-import { LayoutDashboard, Wallet, Boxes, Users, LineChart, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Wallet, AppWindow, ShoppingCart, Users, LineChart, ShieldCheck } from 'lucide-react'
 
 /** Module key → user flag. */
 export const MODULE_FLAGS = {
@@ -30,7 +30,8 @@ export const NAV_ITEMS = [
   { key: 'dev', label: 'Dev Tracking', path: '/dev-tracking', icon: LineChart, module: 'dev' },
   { key: 'hr', label: 'People & Payroll', path: '/hr', icon: Users, module: 'hr' },
   { key: 'finance', label: 'Finance', path: '/finance', icon: Wallet, module: 'finance' },
-  { key: 'scm', label: 'Purchases', path: '/scm', icon: Boxes, module: 'scm' },
+  { key: 'products', label: 'Products', path: '/products', icon: AppWindow, module: 'scm' },
+  { key: 'scm', label: 'Purchases', path: '/scm', icon: ShoppingCart, module: 'scm' },
   { key: 'users', label: 'Users & Access', path: '/admin/users', icon: ShieldCheck, module: 'hr' },
 ]
 

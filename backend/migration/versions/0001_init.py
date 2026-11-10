@@ -147,12 +147,25 @@ def upgrade() -> None:
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('application_price', sa.Numeric(precision=15, scale=2), nullable=True),
     sa.Column('margin', sa.Numeric(precision=15, scale=2), nullable=True),
+    sa.Column('copy_sold', sa.Integer(), nullable=False, server_default='0'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_products_id'), 'products', ['id'], unique=False)
     op.create_index(op.f('ix_products_sku'), 'products', ['sku'], unique=True)
+    op.create_table('purchases',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('item_name', sa.String(length=255), nullable=True),
+    sa.Column('category', sa.String(length=255), nullable=True),
+    sa.Column('unit_price', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('total', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_purchases_id'), 'purchases', ['id'], unique=False)
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
@@ -269,6 +282,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
+    op.drop_index(op.f('ix_purchases_id'), table_name='purchases')
+    op.drop_table('purchases')
     op.drop_index(op.f('ix_products_sku'), table_name='products')
     op.drop_index(op.f('ix_products_id'), table_name='products')
     op.drop_table('products')

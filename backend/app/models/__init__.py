@@ -3,6 +3,7 @@ from app.models.auth import User
 from app.models.finance import ExpenseCategory, ExpenseType, Finance, ExpenseStatus
 from app.models.scm import (
     Product,
+    Purchase,
 )
 from app.models.hr import (
     Department,
@@ -24,6 +25,7 @@ __all__ = [
     "ExpenseType",
     "Finance",
     "Product",
+    "Purchase",
     "Department",
     "AttendanceLog",
     "LeaveRequest",

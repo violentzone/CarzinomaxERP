@@ -19,7 +19,7 @@ const PERMISSIONS = [
   { key: 'has_dev_access', label: 'Dev Tracking', hint: 'Projects, investments, downloads', icon: LineChart },
   { key: 'has_hr_access', label: 'People & Payroll', hint: 'Users, attendance, leave, paychecks', icon: UsersIcon },
   { key: 'has_finance_access', label: 'Finance', hint: 'Expense ledger & overview', icon: Wallet },
-  { key: 'has_scm_access', label: 'Purchases', hint: 'Product / purchase catalog', icon: Boxes },
+  { key: 'has_scm_access', label: 'Purchases', hint: 'Products and purchases', icon: Boxes },
 ]
 
 const EMPTY = {

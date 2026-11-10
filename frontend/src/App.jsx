@@ -4,7 +4,8 @@ import AppLayout from './components/layout/AppLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import FinancePage from './pages/finance/FinancePage'
-import ScmPage from './pages/scm/ScmPage'
+import ProductPage from './pages/scm/ProductPage'
+import PurchasePage from './pages/scm/PurchasePage'
 import HrPage from './pages/hr/HrPage'
 import DevTrackingPage from './pages/devTracking/DevTrackingPage'
 import UsersPage from './pages/admin/Users'
@@ -24,7 +25,8 @@ const router = createBrowserRouter([
       { path: 'dev-tracking', element: <DevTrackingPage />, handle: { title: 'Dev Tracking' } },
       { path: 'hr', element: <HrPage />, handle: { title: 'People & Payroll' } },
       { path: 'finance', element: <FinancePage />, handle: { title: 'Finance' } },
-      { path: 'scm', element: <ScmPage />, handle: { title: 'Purchases' } },
+      { path: 'products', element: <ProductPage />, handle: { title: 'Products' } },
+      { path: 'scm', element: <PurchasePage />, handle: { title: 'Purchases' } },
       { path: 'admin/users', element: <UsersPage />, handle: { title: 'Users & Access' } },
       { path: '*', element: <NotFound />, handle: { title: 'Not Found' } },
     ],

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import String, Numeric, ForeignKey, Text
+from sqlalchemy import String, Numeric, ForeignKey, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -15,5 +15,15 @@ class Product(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     application_price: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     margin: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True, default=0)
+    copy_sold: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
 
+
+class Purchase(Base, TimestampMixin):
+    __tablename__ = "purchases"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    item_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    category: Mapped[str] = mapped_column(String(255), nullable=True)
+    unit_price: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    total: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
 

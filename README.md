@@ -73,7 +73,7 @@ receipts into expense drafts and runs the chat assistant.
 | **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
 | **Dev Tracking** | ✅ Working | Projects, money invested per project (the investment expenses booked in Finance against the project, listed read-only), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced when added, automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
 | **Finance** | ✅ Working | Expense ledger: type (paycheck / petty cash / investment / other), amount, vendor, invoice number, category, document date, due date, paid date, planned payment date, a derived payment status (paid / unpaid / overdue), optional dev project link and the receipt it was booked from. Unpaid and overdue bills are shown on the ledger and the overview; the Payments tab is the accountant's worklist (due today, missed, upcoming, unplanned) with one-click "Mark paid". An `investment` linked to a project is what Dev Tracking shows as that project's spend. The overview still rolls payroll, project investments and purchases into one view |
-| **Purchases (SCM)** | 🚧 Minimal | Product catalog where each product is an application (SKU, price, margin) |
+| **Products & Purchases (SCM)** | 🚧 Minimal | Two pages behind the same access flag. **Products**: the company's software products (SKU, price, margin, copies sold; copies sold is read-only). **Purchases**: goods the company buys (item, category, unit price, quantity, a total the server computes) with item counts, spend totals and a breakdown by category and month. Purchases are REST and frontend only, the chat assistant does not know them yet |
 | **React frontend** | ✅ Working | Full SPA: dashboard, all modules, user & access admin, light/dark theme, permission-gated navigation |
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
@@ -276,7 +276,7 @@ All routes live under `/api/v1` and, except for login, expect an
 | `/auth` | `POST /login`, `POST /logout`, `GET /me` |
 | `/hr` | users (employees), departments, attendance, leave requests, paychecks |
 | `/finance` | expenses; `POST /receipt` uploads a receipt or invoice (PNG / JPEG / WebP / PDF, 10 MB) and answers with an AI-read expense draft plus the stored `receipt_path`, nothing is booked until `POST /expense`; `GET /expense/{id}/receipt` serves the stored file back |
-| `/scm` | products |
+| `/scm` | products, purchases (`total` = `unit_price` × `amount`, computed on create and update) |
 | `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
 | `/chatbot` | `POST /chatbox` — streams the assistant's reply; answers `interrupt` events with `decision`. `POST /upload` — stores one attachment (PNG / JPEG / WebP / PDF, 10 MB) whose `id` goes into `chatbox` `attachments` |
 
@@ -300,7 +300,8 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
 - [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders
-- [ ] Purchases: vendors and purchase orders on top of the product catalog
+- [x] Purchases: record goods bought, with quantities and spend totals
+- [ ] Purchases: vendors, purchase orders and chat tools
 
 ## 🤝 Contributing
 

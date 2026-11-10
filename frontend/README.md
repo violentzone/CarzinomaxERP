@@ -133,7 +133,14 @@ token) clears the session and returns you to the login screen.
   The Overview tab pulls its totals from paychecks, the product catalog and the
   ledger (project investments are the ledger's investment expenses with a project),
   showing only what your flags allow.
-- **Purchases** — the SCM router is a product catalog where each product is an application (SKU, price, margin).
+- **Products** — the company's software products (SKU, price, margin). Copies sold is shown
+  per product, in the tiles (with sales value = price × copies) and in a bar chart; it is
+  set in the product form.
+- **Purchases** — goods the company buys. The Records tab adds, edits and deletes purchases
+  (item, category, unit price, quantity; the server computes the total), with search, a
+  category filter and tiles for purchases, items bought, total spend, average unit price
+  and top category. The Breakdown tab charts spend by category and per month and lists the
+  top items. Both pages need the SCM access flag.
 - **Assistant** — the chat drawer (topbar button) streams the orchestrator's reply;
   deletes pause for your approval. The paperclip or a pasted image attaches
   PNG / JPEG / WebP / PDF files (5 per message, 10 MB each, one image); they upload first
