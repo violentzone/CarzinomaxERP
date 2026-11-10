@@ -13,7 +13,7 @@ The ERP is sized for a small unit and does three things:
 2. **Pays individual members** — every user is an employee; paychecks, leave
    and attendance are recorded per user.
 3. **Handles the unit's finances** — a typed expense ledger plus an overview
-   that rolls payroll, project investments (the ledger's investment expenses with a project) and purchases into one view.
+   that rolls payroll, project investments (the ledger's investment expenses with a project) and the ledger's open bills into one view.
 
 ## Stack
 
@@ -130,9 +130,10 @@ token) clears the session and returns you to the login screen.
   open the stored receipt in a modal (image inline, PDF in a frame, "Open in new
   tab" link). Filters: type and payment status (unpaid / overdue / paid, from the row's stored `status`); tiles
   show booked, unpaid and overdue totals.
-  The Overview tab pulls its totals from paychecks, the product catalog and the
-  ledger (project investments are the ledger's investment expenses with a project),
-  showing only what your flags allow.
+  The Overview tab pulls its totals from paychecks and the ledger (project
+  investments are the ledger's investment expenses with a project; unpaid and
+  overdue bills and the count due for payment today come from the same rows),
+  showing only what your flags allow. It no longer reads the product catalog.
 - **Products** — the company's software products (SKU, price, margin). Copies sold is shown
   per product, in the tiles (with sales value = price × copies) and in a bar chart; it is
   set in the product form.
