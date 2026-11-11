@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.messages import HumanMessage, SystemMessage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import pandas as pd
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -190,8 +191,8 @@ async def send_summary() -> list[str]:
             log.info('[SUMMARY_MAIL] no user opted in, nothing sent')
             return mails
         summary = await generate_summary()
-        # smtplib is sync with a 30 s timeout, a thread keeps the event loop free
-        sent = await asyncio.to_thread(send_email, mails, 'Carzinomax Dev summary', summary)
+        # send_email runs the blocking smtplib exchange in a thread itself
+        sent = await send_email(mails, 'Carzinomax Dev summary', summary)
     except Exception:
         log.error(f'[SUMMARY_MAIL] failed: {format_exc()}')
         return []
@@ -204,6 +205,8 @@ async def paycheck_calculate_and_send_mail() -> None:
     Returns:
         None
     """
+    payroll_log = system_log()
+    payroll_log.info('[PAYCHECK_SCHEDULE] Start')
     # Get all user's payment
     async with SessionLocal() as session:
         stmt = select(hr.Paycheck, auth.User.email).join(
@@ -211,11 +214,21 @@ async def paycheck_calculate_and_send_mail() -> None:
         ).where(auth.User.is_active == True)
         employees_to_pay = (await session.execute(stmt)).all()
 
+    payroll_log.info(f'[PAYCHECK_SCHEDULE] Sending payroll to {len(employees_to_pay)} employee(s)')
     if employees_to_pay:
         # Send mail to employee's email for now
+        sent_mail_list = []
         for paycheck, email in employees_to_pay:
             # Construct email body
-
+            pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
+            pay_table_html = pay_table.to_html()
+            mail_body = f'''
+            <header> Payroll </header>
+            {pay_table_html}
+            <p> We thank you for your service </p>
+            '''
+            mail_subject = 'Payroll'
+            sent = await send_email([email], mail_subject, mail_body)
 
 def start_scheduler() -> None:
     """
