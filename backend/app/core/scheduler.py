@@ -3,9 +3,7 @@ Background jobs, one AsyncIOScheduler per process (single worker only), started 
 """
 import asyncio
 import json
-import smtplib
 from datetime import date, timedelta
-from email.message import EmailMessage
 from traceback import format_exc
 from sqlalchemy import select, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +15,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.github import sync_github_repos
 from app.core.log_module import system_log
-from app.core.util_store import load_prompt
+from app.core.util_store import load_prompt, send_email
 from app.ai_service import llm
 from app.models import auth, hr, finance, dev_tracking, scm
 
@@ -174,41 +172,6 @@ async def generate_summary() -> str:
         log.error(f'[SUMMARY] generate_summary failed: {format_exc()}')
         raise ValueError('generate_summary failed')
 
-def send_email(send_to: list[str], subject: str, body: str) -> list[str]:
-    """
-    Send email from mail address set in .env file, if any of `SMTP_HOSTNAME`, `SMTP_PORT`, `MAIL_FROM` or `SMTP_PASSWORD` env variables are not set, error will raise
-    Args:
-        send_to: List of email addresses to send to
-        subject: Subject of the email
-        body: Body of the email
-
-    Returns:
-        List of successfully sent emails address
-    """
-    msg = EmailMessage()
-    msg["From"] = settings.MAIL_FROM
-    msg['To'] = ', '.join(send_to)
-    msg['Subject'] = subject
-    msg.set_content(body)
-    try:
-        # 465 is implicit SSL, anything else (587) connects plain and upgrades with STARTTLS
-        if settings.SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(settings.SMTP_HOSTNAME, settings.SMTP_PORT, timeout=30)
-        else:
-            server = smtplib.SMTP(settings.SMTP_HOSTNAME, settings.SMTP_PORT, timeout=30)
-            server.starttls()
-        with server:
-            server.login(settings.MAIL_FROM, settings.SMTP_PASSWORD)
-            refused = server.send_message(msg)
-    except Exception:
-        log.error(f'[EMAIL] send to {send_to} failed: {format_exc()}')
-        raise
-    for addr, reason in refused.items():
-        log.warning(f'[EMAIL] {addr} refused: {reason}')
-    sent = [addr for addr in send_to if addr not in refused]
-    log.info(f'[EMAIL] sent "{subject}" to {len(sent)}/{len(send_to)} recipient(s)')
-    return sent
-
 async def send_summary() -> list[str]:
     """
     Scheduled project summary mail, job id `summary_mail`, schedule from the `SUMMARY_SEND_*` settings
@@ -234,6 +197,25 @@ async def send_summary() -> list[str]:
         return []
     log.info(f'[SUMMARY_MAIL] finished, sent to {len(sent)} recipient(s)')
     return sent
+
+async def paycheck_calculate_and_send_mail() -> None:
+    """
+    Function that scheduler should execute to calculate paycheck of all employee and send their payroll
+    Returns:
+        None
+    """
+    # Get all user's payment
+    async with SessionLocal() as session:
+        stmt = select(hr.Paycheck, auth.User.email).join(
+            auth.User, on=(hr.Paycheck.id == auth.User.id)
+        ).where(auth.User.is_active == True)
+        employees_to_pay = (await session.execute(stmt)).all()
+
+    if employees_to_pay:
+        # Send mail to employee's email for now
+        for paycheck, email in employees_to_pay:
+            # Construct email body
+
 
 def start_scheduler() -> None:
     """

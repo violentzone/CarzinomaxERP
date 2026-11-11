@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from uuid import uuid4
 
 from app.models.base import Base
 from app.models.base import TimestampMixin
@@ -41,15 +42,28 @@ class LeaveRequest(Base, TimestampMixin):
 
 
 class Paycheck(Base, TimestampMixin):
+    """
+    Paycheck setup for employees
+    """
     __tablename__ = "paychecks"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    pay_period_start: Mapped[date] = mapped_column(Date, nullable=False)
-    pay_period_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # NULL = open-ended, the member is still working
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    payment_date: Mapped[date] = mapped_column(Date, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)  # draft, paid
+
+
+class Payroll(Base, TimestampMixin):
+    """
+    The table records each time paid to employees
+    """
+    __tablename__ = "payrolls"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, default=uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
+    deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
+    pay_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
