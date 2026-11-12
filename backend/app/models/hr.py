@@ -66,4 +66,5 @@ class Payroll(Base, TimestampMixin):
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
+    net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     pay_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

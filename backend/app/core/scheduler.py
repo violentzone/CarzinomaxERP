@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import date, timedelta
 from traceback import format_exc
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select, func, distinct, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.messages import HumanMessage, SystemMessage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -218,17 +218,38 @@ async def paycheck_calculate_and_send_mail() -> None:
     if employees_to_pay:
         # Send mail to employee's email for now
         sent_mail_list = []
+        add_to_db_count = 0
         for paycheck, email in employees_to_pay:
-            # Construct email body
-            pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
-            pay_table_html = pay_table.to_html()
-            mail_body = f'''
-            <header> Payroll </header>
-            {pay_table_html}
-            <p> We thank you for your service </p>
-            '''
-            mail_subject = 'Payroll'
-            sent = await send_email([email], mail_subject, mail_body)
+            # Create payroll and write database
+            async with SessionLocal() as session:
+                try:
+                    payroll_data = hr.Payroll(user_id=paycheck.user_id, base_salary=paycheck.base_salary,
+                                              allowances=paycheck.allowances,
+                                              deductions=paycheck.deductions, net_pay=paycheck.net_pay)
+                    session.add(payroll_data)
+                    session.commit()
+                    session.refresh()
+                except Exception as e:
+                    payroll_log.error(f"[PAYCHECK_SCHEDULE] Error occur when Adding paycheck to payroll {e}")
+
+            try:
+                # Construct email body
+                pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
+                pay_table_html = pay_table.to_html()
+                mail_body = f'''
+                <header> Payroll </header>
+                {pay_table_html}
+                <p> We thank you for your service </p>
+                '''
+                mail_subject = 'Payroll'
+                sent = await send_email([email], mail_subject, mail_body)
+                sent_mail_list += sent
+                add_to_db_count += 1
+            except Exception as e:
+                payroll_log.error(f'[PAYCHECK_SCHEDULE] Error occur when sending payroll {e}')
+
+        sent_mail_text = ', '.join(sent_mail_list)
+        payroll_log.info('[PAYCHECK_SCHEDULE] Process completed, payroll sent to ' + str(add_to_db_count) + 'users: ' + sent_mail_text)
 
 def start_scheduler() -> None:
     """
