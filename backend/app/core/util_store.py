@@ -45,13 +45,14 @@ def deliver_smtp(msg: EmailMessage) -> dict[str, tuple[int, bytes]]:
         refused = server.send_message(msg)
     return refused
 
-async def send_email(send_to: list[str], subject: str, body: str) -> list[str]:
+async def send_email(send_to: list[str], subject: str, body: str, html: bool = False) -> list[str]:
     """
     Send email from mail address set in .env file, if any of `SMTP_HOSTNAME`, `SMTP_PORT`, `MAIL_FROM` or `SMTP_PASSWORD` env variables are not set, error will raise
     Args:
         send_to: List of email addresses to send to
         subject: Subject of the email
         body: Body of the email
+        html: Send `body` as HTML instead of plain text
 
     Returns:
         List of successfully sent emails address
@@ -60,7 +61,7 @@ async def send_email(send_to: list[str], subject: str, body: str) -> list[str]:
     msg["From"] = settings.MAIL_FROM
     msg['To'] = ', '.join(send_to)
     msg['Subject'] = subject
-    msg.set_content(body)
+    msg.set_content(body, subtype='html' if html else 'plain')
     try:
         # smtplib is sync, a thread keeps the event loop free while it talks to the server
         refused = await asyncio.to_thread(deliver_smtp, msg)

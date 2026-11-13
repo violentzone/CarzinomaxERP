@@ -5,12 +5,13 @@ import asyncio
 import json
 from datetime import date, timedelta
 from traceback import format_exc
-from sqlalchemy import select, func, distinct, insert
+from sqlalchemy import select, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.messages import HumanMessage, SystemMessage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pandas as pd
+from datetime import datetime
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -210,7 +211,8 @@ async def paycheck_calculate_and_send_mail() -> None:
     # Get all user's payment
     async with SessionLocal() as session:
         stmt = select(hr.Paycheck, auth.User.email).join(
-            auth.User, on=(hr.Paycheck.id == auth.User.id)
+            auth.User,
+            hr.Paycheck.user_id == auth.User.id
         ).where(auth.User.is_active == True)
         employees_to_pay = (await session.execute(stmt)).all()
 
@@ -224,29 +226,33 @@ async def paycheck_calculate_and_send_mail() -> None:
             async with SessionLocal() as session:
                 try:
                     payroll_data = hr.Payroll(user_id=paycheck.user_id, base_salary=paycheck.base_salary,
-                                              allowances=paycheck.allowances,
-                                              deductions=paycheck.deductions, net_pay=paycheck.net_pay)
+                                              allowances=paycheck.allowances,deductions=paycheck.deductions,
+                                              net_pay=paycheck.net_pay)
                     session.add(payroll_data)
-                    session.commit()
-                    session.refresh()
+                    await session.commit()
+                    await session.refresh(payroll_data)
+
+                    try:
+                        # Construct email body
+                        pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],
+                                                 index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
+                        pay_table_html = pay_table.to_html()
+                        mail_body = f'''
+                        <h2> Payroll </h2>
+                        {pay_table_html}
+                        <p> We thank you for your service </p>
+                        '''
+                        mail_subject = 'Payroll'
+                        sent = await send_email([email], mail_subject, mail_body, html=True)
+                        sent_mail_list += sent
+                        add_to_db_count += 1
+
+                    except Exception as e:
+                        payroll_log.error(f'[PAYCHECK_SCHEDULE] Error occur when sending payroll {e}')
                 except Exception as e:
                     payroll_log.error(f"[PAYCHECK_SCHEDULE] Error occur when Adding paycheck to payroll {e}")
 
-            try:
-                # Construct email body
-                pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
-                pay_table_html = pay_table.to_html()
-                mail_body = f'''
-                <header> Payroll </header>
-                {pay_table_html}
-                <p> We thank you for your service </p>
-                '''
-                mail_subject = 'Payroll'
-                sent = await send_email([email], mail_subject, mail_body)
-                sent_mail_list += sent
-                add_to_db_count += 1
-            except Exception as e:
-                payroll_log.error(f'[PAYCHECK_SCHEDULE] Error occur when sending payroll {e}')
+
 
         sent_mail_text = ', '.join(sent_mail_list)
         payroll_log.info('[PAYCHECK_SCHEDULE] Process completed, payroll sent to ' + str(add_to_db_count) + 'users: ' + sent_mail_text)

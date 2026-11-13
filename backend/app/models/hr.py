@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from app.models.base import Base
 from app.models.base import TimestampMixin
@@ -47,7 +47,7 @@ class Paycheck(Base, TimestampMixin):
     """
     __tablename__ = "paychecks"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
@@ -61,10 +61,10 @@ class Payroll(Base, TimestampMixin):
     """
     __tablename__ = "payrolls"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(primary_key=True, index=True, default=uuid4)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     base_salary: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     allowances: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    pay_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pay_time: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=datetime.now)
