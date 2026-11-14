@@ -71,7 +71,7 @@ Status is pre-alpha. The codebase was rebuilt from scratch ("Init v2"); an earli
 * Dev Tracking has a fourth tab, **GitHub repos**: lists `dev_github_repos` (stars, downloads, last sync, error) and adds a repo; remove / rename / `github_sync` have no UI yet.
 * Finance's ledger tab has **Book from receipt** (hidden file input → `financeApi.readReceipt` → `ResourceSection`'s `openCreate(values, note)` opens the create modal prefilled; `preparePayload` adds `receipt_path` on create), a payment-status filter and unpaid / overdue tiles, and a **Payments** tab (`PaymentsSection`: due / upcoming / unplanned views over the same `listExpenses` call, "Mark paid" row action, tiles from `summary(shown, all)`); shared helpers in `lib/expenses.js` (`isOverdue`, `isPaid`, both read the row's stored `status`) and `lib/uploads.js` (upload limits, also used by the chat composer). Rows booked from a document open `ReceiptModal` (in `pages/finance/FinancePage.jsx`) via `financeApi.fetchReceipt` → `apiGetBlob`.
 * Chat assistant: `components/chat/ChatPanel.jsx` (slide-over drawer mounted in `AppLayout`), `lib/useChat.js` (transcript, `send`, `decide`, `reset`, client-generated `thread_id`), `api/chatbot.js` (NDJSON reader over `apiPostStream`, `upload` over `apiPostForm`). The composer's paperclip or a pasted image attaches PNG / JPEG / WebP / PDF files (5 per message, 10 MB each); they upload before the turn streams and show as chips / thumbnails in the user bubble.
-* Vite dev server proxies `/api` → `http://localhost:8000`. Sidebar is gated by the user's module flags. 403 shows an in-page "Restricted" panel; 401 clears the session.
+* Vite dev server proxies `/api` → `http://localhost:<BACKEND_PORT>` (`vite.config.js` reads `BACKEND_PORT` from the repo-root `.env` or the shell, default 8000). Sidebar is gated by the user's module flags. 403 shows an in-page "Restricted" panel; 401 clears the session.
 * Details in [frontend/README.md](frontend/README.md).
 
 ### ⚠️ Known gaps (do not build on these)
@@ -105,7 +105,7 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │   ├── logs/                            # Runtime logs (gitignored): system/system.log, users/<id>/user.log
 │   ├── uploads/                         # Chat attachments (gitignored): <user_id>/<uuid>.<ext>
 │   └── app/
-│       ├── main.py                      # Lifespan: banner, admin seed, LLM ping, scheduler; CORS; /health
+│       ├── main.py                      # Lifespan: banner, admin seed, LLM ping, scheduler; CORS; /health; `python -m app.main` dev entry (BACKEND_PORT)
 │       ├── ai_service/
 │       │   ├── __init__.py              # exports `llm`, `init_orchestrator`
 │       │   ├── agents.py                # ChatLiteLLM `llm`, sub-agents, orchestrator factory, HITL delete tools
@@ -122,7 +122,7 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │       │       ├── dev_tracking.py      # /dev_tracking: projects, investments, downloads, github_repo, github_sync
 │       │       └── chatbot.py           # /chatbot: LLM ping (auth), attachment upload, NDJSON chatbox stream
 │       ├── core/
-│       │   ├── config.py                # pydantic-settings; derives ASYNC_DATABASE_URL (asyncpg)
+│       │   ├── config.py                # pydantic-settings; derives ASYNC_DATABASE_URL (asyncpg); copies DB_PORT / BACKEND_PORT from the repo-root .env
 │       │   ├── database.py              # async engine + SessionLocal/get_db; sync engine (psycopg) + SyncSessionLocal/get_sync_db
 │       │   ├── github.py                # GitHub stars/downloads fetch + sync_github_repos (scheduler job and manual endpoint)
 │       │   ├── log_module.py            # system_log() / user_log(user_id) on loguru
@@ -145,7 +145,7 @@ carzinomax-dev/                      # repo folder on disk is still CarzinomaxER
 │
 └── frontend/                            # React 19 + Vite SPA
     ├── .env.example                     # VITE_API_BASE_URL (default /api/v1)
-    ├── vite.config.js                   # /api proxy to :8000
+    ├── vite.config.js                   # /api proxy to localhost:<BACKEND_PORT> (repo-root .env, default 8000)
     └── src/
         ├── api/                         # One module per backend router (auth, hr, finance, scm, devTracking, chatbot)
         ├── components/ui/               # Design-system kit
@@ -170,10 +170,11 @@ cd backend
 cp .env.example .env        # fill in ADMIN_DB_CONNECTION, APP_DB_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY, LLM_*, SMTP_* / MAIL_FROM, SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ (+ WEEKDAY or MONTHDAY); optional APP_DB_USER / GITHUB_TOKEN / GITHUB_SYNC_CRON / UPLOAD_DIR / UPLOAD_MAX_BYTES
 uv sync
 uv run alembic upgrade head # tables are created ONLY by Alembic; startup does not create_all
-uv run uvicorn app.main:app --reload
+uv run python -m app.main   # dev server with reload on BACKEND_PORT from the repo-root .env (default 8000); `uv run uvicorn app.main:app --reload` ignores it and needs --port
 ```
 
-* API docs: http://localhost:8000/docs. Health: `/health`.
+* API docs: http://localhost:8000/docs (or `BACKEND_PORT`). Health: `/health`.
+* Ports are set once, in the repo-root `.env` (the one `docker-compose.yml` reads): `config.py` copies only `DB_PORT` and `BACKEND_PORT` from it into the process environment (shell wins, empty = not set). `BACKEND_PORT` is the port of `python -m app.main` and the Vite proxy target; `DB_PORT` reaches the backend through `${DB_PORT:-5432}` in `ADMIN_DB_CONNECTION` in `backend/.env`. In Docker neither is passed to the container (it always serves on 8000 and talks to `db:5432`). `migration/env.py` does not follow `DB_PORT`: its URL is hardcoded.
 * Schema changes go into `migration/versions/0001_init.py` (the single baseline revision); do not add new revisions. A database that already exists is therefore not migrated: recreate it (`docker compose down -v`) or add the columns by hand (see Known gaps).
 * Databases created by the pre-Alembic `create_all` flow are auto-stamped at `0001` by `migration/env.py`.
 * Chat agent without the API: `uv run python -m app.ai_service.agents` (interactive loop, approves deletes from the terminal).

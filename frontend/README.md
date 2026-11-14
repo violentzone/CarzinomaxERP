@@ -27,15 +27,15 @@ The ERP is sized for a small unit and does three things:
 ## Getting started
 
 ```bash
-# 1) Start the backend first (from ../backend) so /api is reachable on :8000
-#    uv run uvicorn app.main:app --reload
+# 1) Start the backend first (from ../backend) so /api is reachable on BACKEND_PORT (repo-root .env, default 8000)
+#    uv run python -m app.main
 
 # 2) Frontend
 npm install
 npm run dev        # http://localhost:5173
 ```
 
-The Vite dev server proxies `/api` → `http://localhost:8000` (see
+The Vite dev server proxies `/api` → `http://localhost:8000` (the port follows `BACKEND_PORT` in the repo-root `.env`; see
 `vite.config.js`), so the SPA talks to the API same-origin. For a production
 build, set `VITE_API_BASE_URL` (see `.env.example`) and `npm run build`.
 

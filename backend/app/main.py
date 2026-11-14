@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.future import select
@@ -137,3 +138,8 @@ def health():
         dict: A dictionary containing the health status.
     """
     return {"status": "healthy"}
+
+
+# Dev entry point: `uv run python -m app.main` serves on BACKEND_PORT from the repo-root .env, with reload
+if __name__ == '__main__':
+    uvicorn.run('app.main:app', host='127.0.0.1', port=settings.BACKEND_PORT, reload=True)

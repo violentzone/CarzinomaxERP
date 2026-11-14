@@ -13,6 +13,8 @@
 # the shell or a root .env: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
 # DB_PORT, BACKEND_PORT, FRONTEND_PORT, TZ (IANA name, scheduler hours and log
 # timestamps follow it; the python image defaults to UTC without it).
+# A backend or Vite dev server run on the host reads DB_PORT / BACKEND_PORT from
+# that same root .env (backend/app/core/config.py, frontend/vite.config.js).
 #
 # Needs Docker Compose v2.23+ (dockerfile_inline and configs.content).
 

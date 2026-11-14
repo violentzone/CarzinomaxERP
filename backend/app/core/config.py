@@ -1,11 +1,24 @@
 import os
+from pathlib import Path
 from typing import Any, Optional
+from dotenv import dotenv_values
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The two ports live in the repo-root .env (the one docker-compose.yml reads). Only they are copied into the process
+# environment, so nothing else in that file (TZ, POSTGRES_*) reaches the app; the shell wins and an empty value counts as not set
+root_env = dotenv_values(Path(__file__).resolve().parents[3] / '.env')
+for port_name in ('DB_PORT', 'BACKEND_PORT'):
+    if root_env.get(port_name):
+        os.environ.setdefault(port_name, root_env[port_name])
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Carzinomax Dev"
     API_V1_STR: str = "/api/v1"
+
+    # Port `python -m app.main` listens on, from BACKEND_PORT in the repo-root .env
+    # Keeps a default because the Docker container never receives it (the image always serves on 8000)
+    BACKEND_PORT: int = 8000
 
     # JWT & Auth
     # Required, sourced from .env. No default so the app refuses to start

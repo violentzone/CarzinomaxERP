@@ -315,7 +315,7 @@ welcome. If the vision resonates, the most helpful thing you can do right now is
 
 **Prerequisites:** Python 3.14+, [uv](https://github.com/astral-sh/uv), Node 20+,
 and a PostgreSQL to point at. The compose database works fine for this:
-`docker compose up db` exposes it on `localhost:5432`.
+`docker compose up db` exposes it on `localhost:5432` (or `DB_PORT` from the root `.env`).
 
 **Backend**
 
@@ -323,15 +323,17 @@ and a PostgreSQL to point at. The compose database works fine for this:
 cd backend
 cp .env.example .env
 #   Same variables as the Docker setup. ADMIN_DB_CONNECTION is the URL the backend runs with: the carzinomax
-#   role and APP_DB_PASSWORD, e.g. postgresql://carzinomax:<APP_DB_PASSWORD>@localhost:5432/carzinomax.
+#   role and APP_DB_PASSWORD, e.g. postgresql://carzinomax:<APP_DB_PASSWORD>@localhost:${DB_PORT:-5432}/carzinomax
+#   (${DB_PORT:-5432} is filled from DB_PORT in the root .env; a literal port works too).
 #   Alembic does not use it; it connects as the database administrator through the URL in migration/env.py.
 
 uv sync                       # install dependencies
 uv run alembic upgrade head   # as the administrator: schema, seeded ERP admin, the carzinomax role and its grants
-uv run uvicorn app.main:app --reload   # runs as carzinomax
+uv run python -m app.main     # runs as carzinomax; dev server with reload on BACKEND_PORT from the root .env (default 8000)
+                              # `uv run uvicorn app.main:app --reload` also works but ignores BACKEND_PORT: pass --port
 ```
 
-API docs at **http://localhost:8000/docs**. First start seeds the admin user and
+API docs at **http://localhost:8000/docs** (or your `BACKEND_PORT`). First start seeds the admin user and
 pings the LLM, exactly as in Docker.
 
 **Frontend**
@@ -342,7 +344,7 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-The Vite dev server proxies `/api` to `http://localhost:8000`, so no CORS setup
+The Vite dev server proxies `/api` to `http://localhost:8000` (the port follows `BACKEND_PORT` in the root `.env`), so no CORS setup
 is needed. For a production build outside Docker, set `VITE_API_BASE_URL` (see
 `frontend/.env.example`) and run `npm run build`.
 
