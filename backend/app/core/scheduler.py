@@ -287,10 +287,16 @@ def start_scheduler() -> None:
         summary_trigger = CronTrigger(day=settings.SUMMARY_SEND_MONTHDAY, hour=settings.SUMMARY_SEND_TIME, minute=0)
     scheduler.add_job(send_summary, summary_trigger, id='summary_mail', name='Project summary mail', replace_existing=True, misfire_grace_time=3600, coalesce=True)
 
+    # Payroll schedules
+    payroll_trigger = CronTrigger.from_crontab(settings.PAYCHECK_CALCULATE_TIMESPOT)
+    scheduler.add_job(paycheck_calculate_and_send_mail, trigger=payroll_trigger, id='paycheck_calculate_and_send_mail')
+
     scheduler.start()
     log.info(f'[SCHEDULER]  Initialized and started ({len(scheduler.get_jobs())} job(s)).')
     for job in scheduler.get_jobs():
         log.info(f"[SCHEDULER]  job '{job.id}' next run at {job.next_run_time}")
+
+
 
 
 def shutdown_scheduler() -> None:
