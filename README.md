@@ -231,8 +231,11 @@ The first migration (`0001_init`) creates `carzinomax` with the password from
 tables. An existing role of that name is kept as it is (roles are cluster-wide),
 and `alembic downgrade base` drops it again unless the migration is connected as
 that very role. `ADMIN_DB_CONNECTION` in `backend/.env` is the URL the backend
-runs with, so it names `carzinomax`; Alembic connects with the administrator's
-URL set in `backend/migration/env.py`.
+runs with, so it names `carzinomax`; Alembic connects as the administrator named by
+`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` in the root `.env`, on
+`localhost:DB_PORT`. When they are not set there it falls back to
+`ADMIN_DB_CONNECTION`, which on the host only works if that URL is an
+administrator.
 
 In the compose stack the backend container runs the migration and the server
 with the same `POSTGRES_USER` URL, and `POSTGRES_USER` defaults to `carzinomax`,
@@ -325,7 +328,8 @@ cp .env.example .env
 #   Same variables as the Docker setup. ADMIN_DB_CONNECTION is the URL the backend runs with: the carzinomax
 #   role and APP_DB_PASSWORD, e.g. postgresql://carzinomax:<APP_DB_PASSWORD>@localhost:${DB_PORT:-5432}/carzinomax
 #   (${DB_PORT:-5432} is filled from DB_PORT in the root .env; a literal port works too).
-#   Alembic does not use it; it connects as the database administrator through the URL in migration/env.py.
+#   Alembic connects as the database administrator instead: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB in the
+#   root .env, on localhost:DB_PORT. Without them it falls back to ADMIN_DB_CONNECTION, which only works if that is an administrator.
 
 uv sync                       # install dependencies
 uv run alembic upgrade head   # as the administrator: schema, seeded ERP admin, the carzinomax role and its grants

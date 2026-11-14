@@ -1,7 +1,10 @@
 """Alembic environment.
 
-Resolves the database URL from the app's settings (same .env as the server)
-and registers every model on Base.metadata for autogenerate support.
+Connects as the database administrator named in the repo-root .env (the one
+docker-compose.yml reads): POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB on
+localhost:DB_PORT. When that file names no administrator (the Docker image has
+no root .env) it falls back to the app's own URL. The URL is assembled in
+app/core/config.py as settings.MIGRATION_DATABASE_URL. Registers every model on Base.metadata for autogenerate support.
 
 Two online modes:
 - CLI (`alembic upgrade head`, `alembic revision --autogenerate ...`): builds
@@ -29,7 +32,7 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode — emits SQL to stdout, no DB needed."""
     context.configure(
-        url='postgresql+asyncpg://admin:OVdj7jx5BC7N@localhost:5500/carzinomax',
+        url=settings.MIGRATION_DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -65,7 +68,7 @@ def _ensure_baseline(connection) -> None:
 
 async def run_async_migrations() -> None:
     cfg = config.get_section(config.config_ini_section, {})
-    cfg["sqlalchemy.url"] = 'postgresql+asyncpg://admin:OVdj7jx5BC7N@localhost:5500/carzinomax'
+    cfg["sqlalchemy.url"] = settings.MIGRATION_DATABASE_URL
     connectable = async_engine_from_config(cfg, prefix="sqlalchemy.", poolclass=pool.NullPool)
     # Own transaction, committed before migrations run — alembic manages the
     # migration transaction itself on the second connection.

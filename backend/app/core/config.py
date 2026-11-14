@@ -4,9 +4,11 @@ from typing import Any, Optional
 from dotenv import dotenv_values
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 # The two ports live in the repo-root .env (the one docker-compose.yml reads). Only they are copied into the process
-# environment, so nothing else in that file (TZ, POSTGRES_*) reaches the app; the shell wins and an empty value counts as not set
+# environment, so nothing else in that file (TZ, POSTGRES_*) reaches the process environment; the shell wins and an empty value counts as not set
+# POSTGRES_* are read from root_env once, below, for MIGRATION_DATABASE_URL
 root_env = dotenv_values(Path(__file__).resolve().parents[3] / '.env')
 for port_name in ('DB_PORT', 'BACKEND_PORT'):
     if root_env.get(port_name):
@@ -52,6 +54,12 @@ class Settings(BaseSettings):
     
     # Async database URL computed automatically
     ASYNC_DATABASE_URL: str = ""
+
+    # URL `alembic upgrade head` connects with (migration/env.py), computed below: the administrator from the repo-root .env
+    # (POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB, the account docker-compose.yml creates the db service with) on localhost:DB_PORT
+    # Without them (the Docker image has no root .env) it is ASYNC_DATABASE_URL, which compose points at the db service as that administrator
+    MIGRATION_DATABASE_URL: str = ""
+
     LLM_TYPE: str = "remote"
     LLM_API_BASE: str = ""
     LLM_MODEL: str = ""
@@ -158,6 +166,16 @@ class Settings(BaseSettings):
         if v is not None and not 1 <= v <= 31:
             raise ValueError(f"SUMMARY_SEND_MONTHDAY must be between 1 and 31, got {v}")
         return v
+
+    @model_validator(mode="after")
+    def assemble_migration_db_url(self) -> "Settings":
+        """Fill MIGRATION_DATABASE_URL from the repo-root .env administrator, else from ASYNC_DATABASE_URL."""
+        if self.MIGRATION_DATABASE_URL:
+            return self
+        self.MIGRATION_DATABASE_URL = self.ASYNC_DATABASE_URL
+        if root_env.get('POSTGRES_USER') and root_env.get('POSTGRES_PASSWORD'):
+            self.MIGRATION_DATABASE_URL = URL.create('postgresql+asyncpg', username=root_env['POSTGRES_USER'], password=root_env['POSTGRES_PASSWORD'], host='localhost', port=int(os.environ.get('DB_PORT') or 5432), database=root_env.get('POSTGRES_DB') or 'carzinomax').render_as_string(hide_password=False)
+        return self
 
     @model_validator(mode="after")
     def check_summary_schedule(self) -> "Settings":

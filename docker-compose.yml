@@ -14,7 +14,9 @@
 # DB_PORT, BACKEND_PORT, FRONTEND_PORT, TZ (IANA name, scheduler hours and log
 # timestamps follow it; the python image defaults to UTC without it).
 # A backend or Vite dev server run on the host reads DB_PORT / BACKEND_PORT from
-# that same root .env (backend/app/core/config.py, frontend/vite.config.js).
+# that same root .env (backend/app/core/config.py, frontend/vite.config.js), and
+# `alembic upgrade head` run on the host connects as POSTGRES_USER / POSTGRES_PASSWORD
+# / POSTGRES_DB from it (backend/migration/env.py).
 #
 # Needs Docker Compose v2.23+ (dockerfile_inline and configs.content).
 
