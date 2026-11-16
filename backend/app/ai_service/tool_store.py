@@ -1,7 +1,7 @@
 import asyncio
 from langchain.tools import tool
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from datetime import datetime, date as date_type, timezone
 from typing import Literal
 from uuid import UUID
@@ -1357,16 +1357,12 @@ def delete_leave_request(leave_request_id: int) -> DeleteOutput:
     return DeleteOutput(id=leave_request_id, message=f'Leave request {leave_request_id} deleted')
 
 class PaycheckDetail(BaseModel):
-    id: int
+    id: UUID
     user_id: int
-    pay_period_start: date_type
-    pay_period_end: date_type | None = None
     base_salary: float
     allowances: float
     deductions: float
     net_pay: float
-    payment_date: date_type
-    status: str
     created_at: datetime
     updated_at: datetime
 
@@ -1377,19 +1373,13 @@ class GetPaychecksOutput(BaseModel):
 @tool
 def get_paychecks(
     user_id: int | None = None,
-    paycheck_id: int | None = None,
-    period_start: date_type | None = None,
-    period_end: date_type | None = None,
-    status: Literal["draft", "paid"] | None = None,
+    paycheck_id: UUID | None = None,
 ) -> GetPaychecksOutput | None:
     """
-    Gets paychecks from database table "paychecks", filtered by parameters that is not None
+    Gets paychecks from database table "paychecks", filtered by parameters that is not None; a paycheck is the standing pay setup of an employee (no period, date or status), which the monthly payroll run pays out
     Args:
         user_id: ID of the user the paychecks belong to, None if not filter by user
-        paycheck_id: Target paycheck ID to query, None if not filter by ID
-        period_start: Start of the period; paychecks whose pay period ends on or after this date (or is open-ended) are returned, None if not filter by start
-        period_end: End of the period; paychecks whose pay period starts on or before this date are returned, None if not filter by end
-        status: Status of the paychecks to filter by, None if not filter by status
+        paycheck_id: UUID of the target paycheck to query, None if not filter by ID
 
     Returns:
         Paycheck data, each paycheck listed in `GetPaychecksOutput.paycheck_detail` with summed net pay in `total`, None if no paycheck fits condition
@@ -1399,12 +1389,6 @@ def get_paychecks(
         stmt = stmt.where(Paycheck.user_id == user_id)
     if paycheck_id is not None:
         stmt = stmt.where(Paycheck.id == paycheck_id)
-    if period_start is not None:
-        stmt = stmt.where(or_(Paycheck.pay_period_end.is_(None), Paycheck.pay_period_end >= period_start))
-    if period_end is not None:
-        stmt = stmt.where(Paycheck.pay_period_start <= period_end)
-    if status is not None:
-        stmt = stmt.where(Paycheck.status == status)
 
     with SyncSessionLocal() as session:
         paychecks = (session.execute(stmt)).scalars().all()
@@ -1420,48 +1404,33 @@ def get_paychecks(
 @tool
 def create_paycheck(
     user_id: int,
-    pay_period_start: date_type,
     base_salary: float,
-    payment_date: date_type,
-    pay_period_end: date_type | None = None,
     allowances: float = 0.0,
     deductions: float = 0.0,
     net_pay: float | None = None,
-    status: Literal["draft", "paid"] = "draft",
 ) -> PaycheckDetail:
     """
-    Creates a new paycheck into database table "paychecks", net pay is computed as base_salary + allowances - deductions when not given
+    Creates a new paycheck (the standing pay setup of an employee) into database table "paychecks", net pay is computed as base_salary + allowances - deductions when not given
     Args:
         user_id: ID of the user the paycheck belongs to, must exist
-        pay_period_start: First day of the pay period
-        base_salary: Base salary of the period
-        payment_date: Date the paycheck is (or will be) paid
-        pay_period_end: Last day of the pay period, must not be earlier than pay_period_start; None when the member is still working (open-ended)
+        base_salary: Base salary paid on each payroll run
         allowances: Allowances added on top of base salary, defaults to 0
         deductions: Deductions taken from the pay, defaults to 0
         net_pay: Explicit net pay to store, None to compute it
-        status: Status of the paycheck, defaults to draft
 
     Returns:
         The created paycheck record
     """
-    if pay_period_end is not None and pay_period_end < pay_period_start:
-        raise ValueError('Pay period end must not be earlier than pay period start')
-
     with SyncSessionLocal() as session:
         if session.get(User, user_id) is None:
             raise ValueError(f'User with id {user_id} not found')
 
         paycheck = Paycheck(
             user_id=user_id,
-            pay_period_start=pay_period_start,
-            pay_period_end=pay_period_end,
             base_salary=base_salary,
             allowances=allowances,
             deductions=deductions,
             net_pay=net_pay if net_pay is not None else base_salary + allowances - deductions,
-            payment_date=payment_date,
-            status=status,
         )
         session.add(paycheck)
         session.commit()
@@ -1471,28 +1440,20 @@ def create_paycheck(
 
 @tool
 def update_paycheck(
-    paycheck_id: int,
-    pay_period_start: date_type | None = None,
-    pay_period_end: date_type | None = None,
+    paycheck_id: UUID,
     base_salary: float | None = None,
     allowances: float | None = None,
     deductions: float | None = None,
     net_pay: float | None = None,
-    payment_date: date_type | None = None,
-    status: Literal["draft", "paid"] | None = None,
 ) -> PaycheckDetail:
     """
     Updates an existing paycheck in database table "paychecks", only fields that is not None are changed; net pay is recomputed when a salary component changes and `net_pay` is not given
     Args:
-        paycheck_id: ID of the paycheck to update
-        pay_period_start: New first day of the pay period, None if not change
-        pay_period_end: New last day of the pay period, None if not change (an open-ended paycheck cannot be reopened through this tool)
+        paycheck_id: UUID of the paycheck to update
         base_salary: New base salary, None if not change
         allowances: New allowances, None if not change
         deductions: New deductions, None if not change
         net_pay: Explicit net pay to store, None to keep or recompute it
-        payment_date: New payment date, None if not change
-        status: New status (use paid to mark the paycheck as paid), None if not change
 
     Returns:
         The updated paycheck record
@@ -1501,12 +1462,6 @@ def update_paycheck(
         paycheck = session.get(Paycheck, paycheck_id)
         if paycheck is None:
             raise ValueError(f'Paycheck with id {paycheck_id} not found')
-        if pay_period_start is not None:
-            paycheck.pay_period_start = pay_period_start
-        if pay_period_end is not None:
-            paycheck.pay_period_end = pay_period_end
-        if paycheck.pay_period_end is not None and paycheck.pay_period_end < paycheck.pay_period_start:
-            raise ValueError('Pay period end must not be earlier than pay period start')
         if base_salary is not None:
             paycheck.base_salary = base_salary
         if allowances is not None:
@@ -1517,21 +1472,17 @@ def update_paycheck(
             paycheck.net_pay = net_pay
         elif base_salary is not None or allowances is not None or deductions is not None:
             paycheck.net_pay = float(paycheck.base_salary) + float(paycheck.allowances) - float(paycheck.deductions)
-        if payment_date is not None:
-            paycheck.payment_date = payment_date
-        if status is not None:
-            paycheck.status = status
         session.commit()
         session.refresh(paycheck)
 
     return PaycheckDetail.model_validate(paycheck, from_attributes=True)
 
 @tool
-def delete_paycheck(paycheck_id: int) -> DeleteOutput:
+def delete_paycheck(paycheck_id: UUID) -> DeleteOutput:
     """
     Deletes a paycheck from database table "paychecks"
     Args:
-        paycheck_id: ID of the paycheck to delete
+        paycheck_id: UUID of the paycheck to delete
 
     Returns:
         ID of the deleted paycheck with a confirmation message
