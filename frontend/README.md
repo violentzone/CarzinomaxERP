@@ -110,8 +110,9 @@ token) clears the session and returns you to the login screen.
   error) and adds new ones by `owner/name` or URL; the backend pulls the numbers
   on create, so a new repo shows dashes only when the pull failed (the error
   column says why) and the next scheduled sync retries it. Removing or renaming a repo and "sync now" are API-only.
-- **People & Payroll** — paychecks recompute `net_pay` (base + allowances −
-  deductions) on save unless you type a value. Leave approve/reject records
+- **People & Payroll** — a paycheck is a member's standing pay setup (no period,
+  payment date or status); `net_pay` (base + allowances − deductions) is filled
+  in on save when the field is blank. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
   new log at "now", or closes their latest open log and fills `total_hours`.
 - **Finance** — the ledger records each expense's type, amount, vendor, invoice
@@ -133,7 +134,9 @@ token) clears the session and returns you to the login screen.
   The Overview tab pulls its totals from paychecks and the ledger (project
   investments are the ledger's investment expenses with a project; unpaid and
   overdue bills and the count due for payment today come from the same rows),
-  showing only what your flags allow. It no longer reads the product catalog.
+  showing only what your flags allow. Payroll is one "Payroll set up" total (the
+  sum of every paycheck's net pay); paychecks have no date, so the outflow chart
+  and the recent payments list show investments only. It no longer reads the product catalog.
 - **Products** — the company's software products (SKU, price, margin). Copies sold is shown
   per product, in the tiles (with sales value = price × copies) and in a bar chart; it is
   set in the product form.

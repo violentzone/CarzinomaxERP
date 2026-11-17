@@ -15,8 +15,8 @@ How many attendance log today and how many still clocked in without clock out
 Total working hours this month
 How many leave request pending and how old the oldest pending one is
 How many user on approved leave today
-How many paycheck draft and how many paid
-Total net pay paid this month and the next payment date of a draft paycheck
+How many paycheck (the standing pay setup of a user, not a payment) and for how many user
+Total base salary, allowances, deductions and net pay over every paycheck
 
 ## Finance
 How many expense record and the total amount
