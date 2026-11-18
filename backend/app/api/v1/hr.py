@@ -884,6 +884,7 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
         net_pay = new_paycheck.net_pay if new_paycheck.net_pay is not None else new_paycheck.base_salary + allowances - deductions
 
         paycheck = Paycheck(
+            user_id=new_paycheck.user_id,
             base_salary=new_paycheck.base_salary,
             allowances=allowances,
             deductions=deductions,
