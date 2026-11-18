@@ -19,7 +19,7 @@ import { financeApi } from '../../api/finance'
 import { isOverdue, isPaid } from '../../lib/expenses'
 import { hrApi } from '../../api/hr'
 import { devApi } from '../../api/devTracking'
-import { num, currency, compactCurrency, date as fmtDate, monthKey, monthLabel, titleize, userName, CHART_COLORS, parseDate , today } from '../../lib/format'
+import { num, currency, compactCurrency, date as fmtDate, monthKey, monthLabel, titleize, CHART_COLORS, parseDate , today } from '../../lib/format'
 import { staggerContainer } from '../../lib/motion'
 import { MODULE_LABELS } from '../../lib/roles'
 import StatCard from '../../components/ui/StatCard'
@@ -50,16 +50,15 @@ export default function FinanceOverview() {
     let alive = true
     const want = (mod, fn) => (can(mod) ? safe(fn(), null) : Promise.resolve(null))
     ;(async () => {
-      const [expenses, paychecks, users, projects] = await Promise.all([
+      const [expenses, paychecks, projects] = await Promise.all([
         can('finance') ? financeApi.listExpenses().catch((e) => ({ __error: e })) : Promise.resolve(null),
         want('hr', hrApi.listPaychecks),
-        want('hr', hrApi.listUsers),
         want('dev', devApi.listProjects),
       ])
       if (!alive) return
       // Investments are the ledger's investment expenses with a project; no dev flag needed to total them
       const investments = Array.isArray(expenses) ? expenses.filter((e) => e.expense_type === 'investment' && e.project_id != null) : null
-      setState({ loading: false, expenses, paychecks, users, investments, projects })
+      setState({ loading: false, expenses, paychecks, investments, projects })
     })()
     return () => {
       alive = false
@@ -76,22 +75,19 @@ export default function FinanceOverview() {
   }
   if (state.expenses?.__error?.status === 403) return <AccessDenied module="Finance" />
 
-  const { expenses, paychecks, users, investments, projects } = state
-  const userMap = Object.fromEntries((users || []).map((u) => [String(u.id), u]))
+  const { expenses, paychecks, investments, projects } = state
   const projectMap = Object.fromEntries((projects || []).map((p) => [String(p.project_id), p]))
 
-  const payrollPaid = (paychecks || []).filter((p) => p.status === 'paid').reduce((s, p) => s + num(p.net_pay), 0)
-  const payrollDraft = (paychecks || []).filter((p) => p.status !== 'paid').reduce((s, p) => s + num(p.net_pay), 0)
+  const payrollSetUp = (paychecks || []).reduce((s, p) => s + num(p.net_pay), 0)
   const devSpend = (investments || []).reduce((s, i) => s + num(i.amount), 0)
   const ledgerTotal = (expenses || []).reduce((s, e) => s + num(e.amount), 0)
   const unpaid = (expenses || []).filter((e) => !isPaid(e))
   const overdue = unpaid.filter(isOverdue)
   const toPayToday = unpaid.filter((e) => e.planned_pay_date && e.planned_pay_date <= today())
 
-  // Monthly outflow: payroll (by payment date) + investments (by date), last 12 months with data.
+  // Monthly outflow: investments (by date), last 12 months with data; a paycheck is a pay setup without a date.
   const months = {}
-  const bucket = (k) => (months[k] = months[k] || { payroll: 0, investments: 0 })
-  for (const p of paychecks || []) bucket(monthKey(p.payment_date)).payroll += num(p.net_pay)
+  const bucket = (k) => (months[k] = months[k] || { investments: 0 })
   for (const i of investments || []) bucket(monthKey(i.expense_date)).investments += num(i.amount)
   const outflow = Object.keys(months)
     .filter(Boolean)
@@ -104,16 +100,8 @@ export default function FinanceOverview() {
   for (const e of expenses || []) byType[e.expense_type] = (byType[e.expense_type] || 0) + 1
   const typeData = Object.entries(byType).map(([name, value]) => ({ name: titleize(name), value }))
 
-  // Recent transactions: unify paychecks + investments
+  // Recent transactions: investments only, a paycheck has no payment date
   const tx = [
-    ...(paychecks || []).map((p) => ({
-      id: `p${p.id}`,
-      date: p.payment_date,
-      kind: 'paycheck',
-      party: userName(userMap[String(p.user_id)]) || `#${p.user_id}`,
-      note: p.status === 'paid' ? 'Paid' : 'Draft',
-      amount: num(p.net_pay),
-    })),
     ...(investments || []).map((i) => ({
       id: `i${i.id}`,
       date: i.expense_date,
@@ -127,7 +115,7 @@ export default function FinanceOverview() {
     .slice(0, 12)
 
   const stats = [
-    paychecks && { label: 'Payroll paid', value: payrollPaid, format: compactCurrency, icon: HandCoins, hint: payrollDraft ? `${currency(payrollDraft)} still in draft` : `${paychecks.length} paychecks` },
+    paychecks && { label: 'Payroll set up', value: payrollSetUp, format: compactCurrency, icon: HandCoins, hint: `${paychecks.length} paychecks` },
     investments && { label: 'Project investments', value: devSpend, format: compactCurrency, icon: Cloud, hint: `${investments.length} entries` },
     expenses && { label: 'Expense ledger', value: ledgerTotal, format: compactCurrency, icon: BookOpen, hint: `${expenses.length} expenses booked` },
     expenses && { label: 'Unpaid bills', value: unpaid.reduce((s, e) => s + num(e.amount), 0), format: compactCurrency, icon: AlertTriangle, hint: [overdue.length ? `${overdue.length} overdue · ${currency(overdue.reduce((s, e) => s + num(e.amount), 0))}` : `${unpaid.length} open, none overdue`, toPayToday.length ? `${toPayToday.length} to pay today` : null].filter(Boolean).join(' · ') },
@@ -157,7 +145,7 @@ export default function FinanceOverview() {
       )}
 
       <div className="grid cols-2">
-        {(paychecks || investments) && (
+        {investments && (
           <Card className="chart-card">
             <h3>
               <TrendingDown size={15} style={{ verticalAlign: -2, marginRight: 6 }} />
@@ -171,7 +159,6 @@ export default function FinanceOverview() {
                   <YAxis tick={{ fontSize: 11, fill: 'var(--text-dim)' }} tickLine={false} axisLine={false} tickFormatter={compactCurrency} />
                   <Tooltip formatter={(v) => currency(v)} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {paychecks && <Bar dataKey="payroll" name="Payroll" stackId="a" fill="#aa3bff" radius={[0, 0, 0, 0]} maxBarSize={48} />}
                   {investments && <Bar dataKey="investments" name="Investments" stackId="a" fill="#22d3ee" radius={[8, 8, 0, 0]} maxBarSize={48} />}
                 </BarChart>
               </ResponsiveContainer>
@@ -213,11 +200,11 @@ export default function FinanceOverview() {
         </Card>
       </div>
 
-      {(paychecks || investments) && (
+      {investments && (
         <Card className="card-pad col gap-3">
           <div>
             <h3>Recent outgoing payments</h3>
-            <p className="muted">Paychecks and project investments, newest first.</p>
+            <p className="muted">Project investments, newest first.</p>
           </div>
           <Table
             columns={[
@@ -228,7 +215,7 @@ export default function FinanceOverview() {
               { key: 'amount', header: 'Amount', align: 'right', render: (r) => <span className="cell-num">{currency(r.amount)}</span> },
             ]}
             rows={tx}
-            empty={{ title: 'No payments yet', hint: 'Paychecks and investments will show up here.' }}
+            empty={{ title: 'No payments yet', hint: 'Investments will show up here.' }}
           />
         </Card>
       )}

@@ -1,25 +1,18 @@
 import { useState } from 'react'
-import { Wallet, CheckCircle2 } from 'lucide-react'
+import { Wallet } from 'lucide-react'
 import { hrApi } from '../../api/hr'
 import { useUsers } from '../../lib/useUsers'
-import { num, currency, date as fmtDate, today, monthBounds, monthKey, parseDate } from '../../lib/format'
-import Badge from '../../components/ui/Badge'
+import { num, currency } from '../../lib/format'
 import ResourceSection from '../../components/ResourceSection'
 import { Select } from '../../components/ui/Field'
 
-const STATUSES = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'paid', label: 'Paid' },
-]
-
 /**
- * Paychecks — one record per member per pay period. Net pay is base +
- * allowances − deductions; the backend computes it when omitted on create, and
- * we recompute it on edit unless a value was typed explicitly.
+ * Paychecks — the standing pay setup of each member, paid out by the monthly
+ * payroll run. Net pay is base + allowances − deductions, filled in when the
+ * field is left blank.
  */
 export default function PaychecksSection() {
   const { userOptions, nameOf } = useUsers()
-  const [statusFilter, setStatusFilter] = useState('')
   const [personFilter, setPersonFilter] = useState('')
 
   const fields = [
@@ -33,14 +26,10 @@ export default function PaychecksSection() {
       options: userOptions,
       placeholder: userOptions.length ? 'Select a member…' : 'No users — create one first',
     },
-    { key: 'pay_period_start', label: 'Period start', type: 'date', required: true, default: monthBounds().start },
-    { key: 'pay_period_end', label: 'Period end', type: 'date', hint: 'Leave blank while the member is still working (open-ended).' },
     { key: 'base_salary', label: 'Base salary', type: 'number', step: '0.01', min: 0, required: true },
     { key: 'allowances', label: 'Allowances', type: 'number', step: '0.01', min: 0, default: 0 },
     { key: 'deductions', label: 'Deductions', type: 'number', step: '0.01', min: 0, default: 0 },
     { key: 'net_pay', label: 'Net pay', type: 'number', step: '0.01', hint: 'Leave blank to compute base + allowances − deductions.' },
-    { key: 'payment_date', label: 'Payment date', type: 'date', required: true, default: today() },
-    { key: 'status', label: 'Status', type: 'select', options: STATUSES, default: 'draft' },
   ]
 
   /** Keep net_pay consistent when the amounts change and no override was typed. */
@@ -55,36 +44,29 @@ export default function PaychecksSection() {
 
   const rowsTransform = (rows) =>
     [...rows]
-      .filter((r) => !statusFilter || r.status === statusFilter)
       .filter((r) => !personFilter || String(r.user_id) === personFilter)
-      .sort((a, b) => (parseDate(b.payment_date) ?? 0) - (parseDate(a.payment_date) ?? 0) || b.id - a.id)
+      .sort((a, b) => nameOf(a.user_id).localeCompare(nameOf(b.user_id)))
 
   const summary = (rows) => {
-    const paid = rows.filter((r) => r.status === 'paid')
-    const draft = rows.filter((r) => r.status !== 'paid')
-    const thisMonth = monthKey(today())
-    const monthTotal = rows
-      .filter((r) => monthKey(r.payment_date) === thisMonth)
-      .reduce((s, r) => s + num(r.net_pay), 0)
     return (
       <div className="summary-row">
         <div className="summary-tile accent">
-          <span className="sum-k">Paid out</span>
-          <span className="sum-v">{currency(paid.reduce((s, r) => s + num(r.net_pay), 0))}</span>
-          <span className="sum-hint">{paid.length} paycheck{paid.length === 1 ? '' : 's'}</span>
+          <span className="sum-k">Net pay total</span>
+          <span className="sum-v">{currency(rows.reduce((s, r) => s + num(r.net_pay), 0))}</span>
+          <span className="sum-hint">{rows.length} paycheck{rows.length === 1 ? '' : 's'}</span>
         </div>
         <div className="summary-tile">
-          <span className="sum-k">Awaiting payment</span>
-          <span className="sum-v">{currency(draft.reduce((s, r) => s + num(r.net_pay), 0))}</span>
-          <span className="sum-hint">{draft.length} draft{draft.length === 1 ? '' : 's'}</span>
+          <span className="sum-k">Base salary</span>
+          <span className="sum-v">{currency(rows.reduce((s, r) => s + num(r.base_salary), 0))}</span>
+          <span className="sum-hint">before allowances and deductions</span>
         </div>
         <div className="summary-tile">
-          <span className="sum-k">This month</span>
-          <span className="sum-v">{currency(monthTotal)}</span>
-          <span className="sum-hint">by payment date</span>
+          <span className="sum-k">Deductions</span>
+          <span className="sum-v">{currency(rows.reduce((s, r) => s + num(r.deductions), 0))}</span>
+          <span className="sum-hint">taken off base and allowances</span>
         </div>
         <div className="summary-tile">
-          <span className="sum-k">People paid</span>
+          <span className="sum-k">People with a paycheck</span>
           <span className="sum-v">{new Set(rows.map((r) => r.user_id)).size}</span>
           <span className="sum-hint">distinct members</span>
         </div>
@@ -95,7 +77,7 @@ export default function PaychecksSection() {
   return (
     <ResourceSection
       title="Paychecks"
-      subtitle="Every payment made to an individual member, by pay period."
+      subtitle="The standing pay setup of each member, paid out by the monthly payroll run."
       moduleName="People & Payroll"
       fetcher={() => hrApi.listPaychecks()}
       create={hrApi.createPaycheck}
@@ -105,8 +87,8 @@ export default function PaychecksSection() {
       updateTitle="Edit paycheck"
       remove={(row) => hrApi.deletePaycheck(row.id)}
       removeLabel="paycheck"
-      removeHint={(r) => `${nameOf(r.user_id)} · ${fmtDate(r.payment_date)} · net ${currency(r.net_pay)}`}
-      emptyHint="Record the first payment to a team member."
+      removeHint={(r) => `${nameOf(r.user_id)} · net ${currency(r.net_pay)}`}
+      emptyHint="Set up the first paycheck for a team member."
       emptyIcon={Wallet}
       fields={fields}
       preparePayload={preparePayload}
@@ -122,54 +104,14 @@ export default function PaychecksSection() {
               </option>
             ))}
           </Select>
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
         </>
-      }
-      rowActions={(r, { reload, toast }) =>
-        r.status !== 'paid' ? (
-          <button
-            type="button"
-            className="icon-btn"
-            title="Mark as paid"
-            aria-label="Mark as paid"
-            onClick={async () => {
-              try {
-                await hrApi.updatePaycheck(r.id, { status: 'paid' })
-                toast.success(`Paycheck for ${nameOf(r.user_id)} marked paid`)
-                reload()
-              } catch (err) {
-                toast.error(err?.detail || 'Could not update paycheck')
-              }
-            }}
-          >
-            <CheckCircle2 size={15} color="var(--success)" />
-          </button>
-        ) : null
       }
       columns={[
         { key: 'user_id', header: 'Member', render: (r) => <span className="cell-strong">{nameOf(r.user_id)}</span> },
-        {
-          key: 'period',
-          header: 'Pay period',
-          render: (r) => (
-            <span className="muted" style={{ whiteSpace: 'nowrap' }}>
-              {fmtDate(r.pay_period_start)} – {r.pay_period_end ? fmtDate(r.pay_period_end) : 'ongoing'}
-            </span>
-          ),
-        },
         { key: 'base_salary', header: 'Base', align: 'right', render: (r) => <span className="cell-num">{currency(r.base_salary)}</span> },
         { key: 'allowances', header: 'Allowances', align: 'right', render: (r) => <span className="cell-num muted">{currency(r.allowances)}</span> },
         { key: 'deductions', header: 'Deductions', align: 'right', render: (r) => <span className="cell-num muted">{num(r.deductions) ? `−${currency(r.deductions)}` : '—'}</span> },
         { key: 'net_pay', header: 'Net pay', align: 'right', render: (r) => <span className="cell-num cell-strong">{currency(r.net_pay)}</span> },
-        { key: 'payment_date', header: 'Paid on', className: 'nowrap', render: (r) => fmtDate(r.payment_date) },
-        { key: 'status', header: 'Status', render: (r) => <Badge status={r.status} /> },
       ]}
     />
   )

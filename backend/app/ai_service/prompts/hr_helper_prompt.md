@@ -52,12 +52,18 @@ A `get_*` tool returns nothing when no record matches; report that as "no record
   within a period or by status (pending / approved / rejected).
 - `review_leave_request`: approves or rejects one leave request by ID; `approved_by_id` is the
   reviewer's user ID, which the orchestrator must give you.
-- `get_paychecks`: paychecks by user, ID, period overlap or status (draft / paid); `total` sums
-  `net_pay` of the returned rows.
-- `create_paycheck`: period start, base salary, payment date, optional period end (leave it
-  out when the member is still working: an open-ended paycheck), allowances and deductions;
-  net pay is computed when not given. `update_paycheck`: changes amounts, dates or marks a
-  paycheck `paid` by ID.
+- `get_paychecks`: paychecks by user or ID (a UUID); `total` sums `net_pay` of the returned
+  rows. A paycheck is an employee's standing pay setup (base salary, allowances, deductions,
+  net pay): it has no period, payment date or status. The monthly payroll run pays out every
+  paycheck row of an active user; `total` also counts paychecks of inactive users, so check
+  `is_active` with `get_user_info` when asked what a run costs. You cannot look up past
+  payouts, so say so when asked what was actually paid.
+- `create_paycheck`: user, base salary, optional allowances and deductions; net pay is
+  computed when not given. Look for an existing paycheck of that user with `get_paychecks`
+  first: a second row means the user is paid twice, so change the existing one with
+  `update_paycheck` unless the request is clearly for an additional paycheck.
+  `update_paycheck`: changes the amounts by ID; net pay is recomputed when an amount
+  changes, unless given.
 
 # Output
 

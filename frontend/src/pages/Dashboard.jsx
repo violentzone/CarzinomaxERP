@@ -82,8 +82,7 @@ export default function Dashboard() {
 
   // --- derive KPIs ---
   const devSpend = (investments || []).reduce((s, i) => s + num(i.amount), 0)
-  const payrollPaid = (paychecks || []).filter((p) => p.status === 'paid').reduce((s, p) => s + num(p.net_pay), 0)
-  const payrollDraft = (paychecks || []).filter((p) => p.status !== 'paid').reduce((s, p) => s + num(p.net_pay), 0)
+  const payrollSetUp = (paychecks || []).reduce((s, p) => s + num(p.net_pay), 0)
   const activeUsers = (users || []).filter((u) => u.is_active).length
   const pendingLeaves = (leaves || []).filter((l) => l.status === 'pending')
   const userMap = Object.fromEntries((users || []).map((u) => [String(u.id), u]))
@@ -91,7 +90,7 @@ export default function Dashboard() {
   const stats = [
     projects && { label: 'Projects', value: projects.length, icon: FolderKanban, hint: 'programs in development' },
     investments && { label: 'Invested in dev', value: devSpend, format: compactCurrency, icon: Cloud, hint: `${investments.length} entries` },
-    paychecks && { label: 'Payroll paid', value: payrollPaid, format: compactCurrency, icon: HandCoins, hint: payrollDraft ? `${compactCurrency(payrollDraft)} in draft` : `${paychecks.length} paychecks` },
+    paychecks && { label: 'Payroll set up', value: payrollSetUp, format: compactCurrency, icon: HandCoins, hint: `${paychecks.length} paychecks` },
     users && { label: 'Team', value: activeUsers, icon: Users, hint: users.length !== activeUsers ? `${users.length - activeUsers} inactive` : 'active members' },
     expenses && !users && { label: 'Ledger entries', value: expenses.length, icon: BookOpen, hint: 'typed expenses' },
     products && !investments && { label: 'Products', value: products.length, icon: Boxes, hint: 'software products' },
@@ -102,10 +101,9 @@ export default function Dashboard() {
   // downloads trend (all projects, by snapshot date)
   const dlSeries = downloadSeries(downloads || []).map((d) => ({ ...d, label: fmtDate(d.date) }))
 
-  // monthly outflow (payroll + investments)
+  // monthly outflow (investments by date; a paycheck is a pay setup without a date)
   const months = {}
-  const bucket = (k) => (months[k] = months[k] || { payroll: 0, investments: 0 })
-  for (const p of paychecks || []) bucket(monthKey(p.payment_date)).payroll += num(p.net_pay)
+  const bucket = (k) => (months[k] = months[k] || { investments: 0 })
   for (const i of investments || []) bucket(monthKey(i.expense_date)).investments += num(i.amount)
   const outflow = Object.keys(months)
     .filter(Boolean)
@@ -208,7 +206,7 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {(paychecks || investments) && (
+        {investments && (
           <Card className="chart-card">
             <h3>
               <TrendingDown size={15} style={{ verticalAlign: -2, marginRight: 6 }} />
@@ -222,7 +220,6 @@ export default function Dashboard() {
                   <YAxis tick={{ fontSize: 11, fill: 'var(--text-dim)' }} tickLine={false} axisLine={false} tickFormatter={compactCurrency} />
                   <Tooltip formatter={(v) => currency(v)} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {paychecks && <Bar dataKey="payroll" name="Payroll" stackId="a" fill="#aa3bff" maxBarSize={48} />}
                   {investments && <Bar dataKey="investments" name="Investments" stackId="a" fill="#22d3ee" radius={[8, 8, 0, 0]} maxBarSize={48} />}
                 </BarChart>
               </ResponsiveContainer>

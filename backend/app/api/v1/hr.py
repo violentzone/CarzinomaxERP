@@ -3,6 +3,7 @@ HR module, Query, add, remove and update User, Department, AttendanceLog, LeaveR
 """
 from datetime import date as date_type, datetime
 from traceback import format_exc
+from uuid import UUID
 
 from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
@@ -812,7 +813,7 @@ async def get_paycheck_list(current_user: User = Depends(get_current_user), db =
 
 
 @hr_router.get("/paycheck/{paycheck_id}")
-async def get_paycheck(paycheck_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+async def get_paycheck(paycheck_id: UUID, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
     Get paycheck by id
     Args:
@@ -840,27 +841,19 @@ async def get_paycheck(paycheck_id: int, current_user: User = Depends(get_curren
 
 
 class CreatePaycheck(BaseModel):
-    user_id: int
-    pay_period_start: date_type
-    pay_period_end: date_type | None = None  # None = open-ended, the member is still working
-    base_salary: float
-    allowances: float | None = 0.0
-    deductions: float | None = 0.0
-    net_pay: float | None = None  # Computed as base_salary + allowances - deductions when omitted
-    payment_date: date_type
-    status: str | None = "draft"  # draft, paid
+   user_id: int
+   base_salary: float
+   allowances: float
+   deductions: float
+   net_pay: float
 
 
 class UpdatePaycheck(BaseModel):
     user_id: int | None = None
-    pay_period_start: date_type | None = None
-    pay_period_end: date_type | None = None
     base_salary: float | None = None
     allowances: float | None = None
     deductions: float | None = None
     net_pay: float | None = None
-    payment_date: date_type | None = None
-    status: str | None = None
 
 
 @hr_router.post("/paycheck")
@@ -878,7 +871,7 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
     log = user_log(current_user.id)
     if not await permission_check('hr', current_user.id, db):
         return JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
-    log.info(f'[PAYCHECK] Create paycheck for user ID: {new_paycheck.user_id} ({new_paycheck.pay_period_start} - {new_paycheck.pay_period_end})')
+    log.info(f'[PAYCHECK] Create paycheck for user ID: {new_paycheck.user_id}')
 
     try:
         user = await db.get(User, new_paycheck.user_id)
@@ -886,24 +879,16 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
             log.warning(f'[PAYCHECK] User ID: {new_paycheck.user_id} not found')
             return JSONResponse({"status": "fail", "error": f"User with id {new_paycheck.user_id} not found"}, status_code=status.HTTP_404_NOT_FOUND, media_type='application/json')
 
-        if new_paycheck.pay_period_end is not None and new_paycheck.pay_period_end < new_paycheck.pay_period_start:
-            log.warning(f'[PAYCHECK] Paycheck period end {new_paycheck.pay_period_end} is before period start {new_paycheck.pay_period_start}')
-            return JSONResponse({"status": "fail", "error": "pay_period_end must not be before pay_period_start"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
-
         allowances = new_paycheck.allowances if new_paycheck.allowances is not None else 0.0
         deductions = new_paycheck.deductions if new_paycheck.deductions is not None else 0.0
         net_pay = new_paycheck.net_pay if new_paycheck.net_pay is not None else new_paycheck.base_salary + allowances - deductions
 
         paycheck = Paycheck(
             user_id=new_paycheck.user_id,
-            pay_period_start=new_paycheck.pay_period_start,
-            pay_period_end=new_paycheck.pay_period_end,
             base_salary=new_paycheck.base_salary,
             allowances=allowances,
             deductions=deductions,
-            net_pay=net_pay,
-            payment_date=new_paycheck.payment_date,
-            status=new_paycheck.status if new_paycheck.status is not None else "draft",
+            net_pay=net_pay
         )
         db.add(paycheck)
         await db.commit()
@@ -917,7 +902,7 @@ async def create_paycheck(new_paycheck: CreatePaycheck, current_user: User = Dep
 
 
 @hr_router.put("/paycheck/{paycheck_id}")
-async def update_paycheck(paycheck_id: int, new_paycheck: UpdatePaycheck, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+async def update_paycheck(paycheck_id: UUID, new_paycheck: UpdatePaycheck, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
     Update paycheck by id
     Args:
@@ -943,10 +928,6 @@ async def update_paycheck(paycheck_id: int, new_paycheck: UpdatePaycheck, curren
         for field_name, field_value in new_paycheck:
             if field_value is not None:
                 setattr(old_paycheck, field_name, field_value)
-        if old_paycheck.pay_period_end is not None and old_paycheck.pay_period_end < old_paycheck.pay_period_start:
-            log.warning(f'[PAYCHECK] Paycheck period end {old_paycheck.pay_period_end} is before period start {old_paycheck.pay_period_start}')
-            await db.rollback()
-            return JSONResponse({"status": "fail", "error": "pay_period_end must not be before pay_period_start"}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
         await db.commit()
         await db.refresh(old_paycheck)
         log.info(f'[PAYCHECK] Paycheck updated: {old_paycheck.to_dict()}')
@@ -957,7 +938,7 @@ async def update_paycheck(paycheck_id: int, new_paycheck: UpdatePaycheck, curren
 
 
 @hr_router.delete("/paycheck/{paycheck_id}")
-async def delete_paycheck(paycheck_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+async def delete_paycheck(paycheck_id: UUID, current_user: User = Depends(get_current_user), db = Depends(get_db)):
     """
     Delete paycheck by id
     Args:
