@@ -1,6 +1,7 @@
+import enum
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, Date, DateTime, ForeignKey, Text
+from sqlalchemy import String, Enum, Numeric, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid import uuid4, UUID
 
@@ -55,6 +56,12 @@ class Paycheck(Base, TimestampMixin):
     net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
 
 
+class PayrollMailStatus(str, enum.Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class Payroll(Base, TimestampMixin):
     """
     The table records each time paid to employees
@@ -68,3 +75,17 @@ class Payroll(Base, TimestampMixin):
     deductions: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
     net_pay: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     pay_time: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=datetime.now)
+    mail_status: Mapped[PayrollMailStatus] = mapped_column(
+        Enum(
+            PayrollMailStatus,
+            native_enum=False,
+            length=32,
+            values_callable=lambda e: [m.value for m in e],
+            validate_strings=True,
+            create_constraint=True,
+        ),
+        nullable=False,
+        default=PayrollMailStatus.PENDING,
+        server_default='pending',
+    )  # payslip mail outcome, pending = the outcome was never recorded
+    mail_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # why the payslip mail failed

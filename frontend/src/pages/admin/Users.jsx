@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShieldCheck, UserPlus, Wallet, Boxes, Users as UsersIcon, LineChart, Mail, Pencil, Trash2, X } from 'lucide-react'
+import { ShieldCheck, UserPlus, Wallet, Boxes, Users as UsersIcon, LineChart, Mail, Pencil, Trash2, X, Eye, EyeOff } from 'lucide-react'
 import { hrApi } from '../../api/hr'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -13,6 +13,7 @@ import Badge from '../../components/ui/Badge'
 import AccessDenied from '../../components/ui/AccessDenied'
 import Table from '../../components/ui/Table'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import Drawer from '../../components/ui/Drawer'
 import { Field, Input, Select } from '../../components/ui/Field'
 
 const PERMISSIONS = [
@@ -44,8 +45,10 @@ export default function UsersPage() {
   const toast = useToast()
   const { rows: users, loading, denied, error, reload } = useList(() => hrApi.listUsers())
 
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [selected, setSelected] = useState(null)
   const [values, setValues] = useState(EMPTY)
+  const [showPassword, setShowPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pendingRemove, setPendingRemove] = useState(null)
   const [removing, setRemoving] = useState(false)
@@ -54,6 +57,14 @@ export default function UsersPage() {
 
   const setField = (k, v) => setValues((s) => ({ ...s, [k]: v }))
   const isSelf = (u) => u && me && u.id === me.id
+  const nameCleared = !!selected?.full_name && !values.full_name.trim()
+
+  const startCreate = () => {
+    setSelected(null)
+    setValues(EMPTY)
+    setShowPassword(false)
+    setDrawerOpen(true)
+  }
 
   const startEdit = (u) => {
     setSelected(u)
@@ -68,52 +79,65 @@ export default function UsersPage() {
       has_dev_access: !!u.has_dev_access,
       send_summary: !!u.send_summary,
     })
+    setShowPassword(false)
+    setDrawerOpen(true)
   }
 
-  const cancelEdit = () => {
-    setSelected(null)
-    setValues(EMPTY)
-  }
+  // The form keeps its values while the drawer slides out; they are reset on the next open.
+  const closeDrawer = () => setDrawerOpen(false)
 
   const submit = async (e) => {
     e.preventDefault()
-    if (selected && isSelf(selected) && !values.is_active) {
-      toast.error('You cannot deactivate your own account')
-      return
+    const email = values.email.trim()
+    const fullName = values.full_name.trim()
+    const toggles = ['is_active', 'send_summary', ...Object.values(MODULE_FLAGS)]
+    let payload
+
+    if (selected) {
+      if (isSelf(selected) && !values.is_active) {
+        toast.error('You cannot deactivate your own account')
+        return
+      }
+      if (nameCleared) {
+        toast.error("Full name can't be cleared")
+        return
+      }
+      // Send only what was edited, so a change another admin made meanwhile is not overwritten.
+      payload = {}
+      if (email !== (selected.email || '')) payload.email = email
+      if (fullName !== (selected.full_name || '')) payload.full_name = fullName
+      for (const key of toggles) {
+        if (!!values[key] !== !!selected[key]) payload[key] = !!values[key]
+      }
+      if (values.password) payload.password = values.password
+      if (!Object.keys(payload).length) {
+        toast.info('No changes to save')
+        closeDrawer()
+        return
+      }
+    } else {
+      if (!values.password) {
+        toast.error('A password is required for new users')
+        return
+      }
+      payload = { email, password: values.password, full_name: fullName || undefined }
+      for (const key of toggles) payload[key] = !!values[key]
     }
+
     setSaving(true)
     try {
-      const flags = Object.fromEntries(Object.values(MODULE_FLAGS).map((f) => [f, !!values[f]]))
       if (selected) {
-        await hrApi.updateUser(selected.id, {
-          email: values.email.trim(),
-          full_name: values.full_name.trim() || undefined,
-          is_active: values.is_active,
-          send_summary: !!values.send_summary,
-          ...flags,
-          password: values.password || undefined,
-        })
-        toast.success(`${values.full_name || values.email} updated`)
+        await hrApi.updateUser(selected.id, payload)
+        toast.success(`${fullName || email} updated`)
         if (isSelf(selected)) {
           await reloadMe()
-          if (!values.has_hr_access) toast.info('You removed your own HR access — this page is now locked')
+          if (payload.has_hr_access === false) toast.info('You removed your own HR access — this page is now locked')
         }
       } else {
-        if (!values.password) {
-          toast.error('A password is required for new users')
-          return
-        }
-        await hrApi.createUser({
-          email: values.email.trim(),
-          password: values.password,
-          full_name: values.full_name.trim() || undefined,
-          is_active: values.is_active,
-          send_summary: !!values.send_summary,
-          ...flags,
-        })
-        toast.success(`${values.full_name || values.email} created`)
+        await hrApi.createUser(payload)
+        toast.success(`${fullName || email} created`)
       }
-      cancelEdit()
+      closeDrawer()
       reload()
     } catch (err) {
       toast.error(err?.detail || 'Could not save user')
@@ -127,7 +151,6 @@ export default function UsersPage() {
     try {
       await hrApi.deleteUser(pendingRemove.id)
       toast.success(`${userName(pendingRemove)} deleted`)
-      if (selected?.id === pendingRemove.id) cancelEdit()
       setPendingRemove(null)
       reload()
     } catch (err) {
@@ -231,148 +254,158 @@ export default function UsersPage() {
         icon={ShieldCheck}
       />
 
-      <div className="row items-start gap-5 wrap" style={{ width: '100%' }}>
-        <div style={{ flex: '2 1 600px', minWidth: 320 }} className="col gap-4">
-          <Card className="card-pad col gap-4">
-            <div className="row spread">
-              <div>
-                <h2>Team</h2>
-                <p className="muted">Everyone with an account, and what they can access.</p>
-              </div>
-              <Button onClick={reload} variant="outline" size="sm" loading={loading}>
-                Refresh
-              </Button>
-            </div>
-
-            {error ? (
-              <div className="note-box">{error}</div>
-            ) : (
-              <Table
-                columns={columns}
-                rows={sorted}
-                loading={loading}
-                empty={{ title: 'No users found', hint: 'Create the first account with the form.' }}
-              />
-            )}
-          </Card>
+      <Card className="card-pad col gap-4">
+        <div className="row spread">
+          <div>
+            <h2>Team</h2>
+            <p className="muted">Everyone with an account, and what they can access.</p>
+          </div>
+          <div className="row gap-2">
+            <Button onClick={reload} variant="outline" size="sm" loading={loading}>
+              Refresh
+            </Button>
+            <Button onClick={startCreate} size="sm" icon={UserPlus}>
+              New user
+            </Button>
+          </div>
         </div>
 
-        <div style={{ flex: '1 1 350px', minWidth: 320 }} className="col gap-4">
-          <Card className="card-pad col gap-4" variant={!!selected}>
-            <div>
-              <h2>{selected ? 'Edit user' : 'New user'}</h2>
-              <p className="muted">
-                {selected
-                  ? `Update details and module access for ${userName(selected)}.`
-                  : 'Register a team member and grant their initial module access.'}
-              </p>
-            </div>
+        {error ? (
+          <div className="note-box">{error}</div>
+        ) : (
+          <Table
+            columns={columns}
+            rows={sorted}
+            loading={loading}
+            empty={{ title: 'No users found', hint: 'Create the first account with the New user button.' }}
+          />
+        )}
+      </Card>
 
-            <form onSubmit={submit} className="col gap-4">
-              <Field label="Full name">
-                <Input
-                  value={values.full_name}
-                  onChange={(e) => setField('full_name', e.target.value)}
-                  placeholder="e.g. Ada Lovelace"
-                />
-              </Field>
+      <Drawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        title={selected ? 'Edit user' : 'New user'}
+        subtitle={
+          selected
+            ? [selected.full_name, selected.email].filter(Boolean).join(' · ')
+            : 'Register a team member and grant their initial module access.'
+        }
+        footer={
+          <>
+            <Button variant="ghost" icon={X} onClick={closeDrawer} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" form="user-form" icon={selected ? ShieldCheck : UserPlus} loading={saving}>
+              {selected ? 'Save changes' : 'Create user'}
+            </Button>
+          </>
+        }
+      >
+        <form id="user-form" onSubmit={submit} className="col gap-4">
+          <Field label="Full name" error={nameCleared ? "Full name can't be cleared." : undefined}>
+            <Input
+              value={values.full_name}
+              onChange={(e) => setField('full_name', e.target.value)}
+              placeholder="e.g. Ada Lovelace"
+              autoFocus
+            />
+          </Field>
 
-              <Field label="Email" required>
-                <Input
-                  type="email"
-                  value={values.email}
-                  onChange={(e) => setField('email', e.target.value)}
-                  placeholder="e.g. ada@company.com"
-                  required
-                />
-              </Field>
+          <Field label="Email" required>
+            <Input
+              type="email"
+              value={values.email}
+              onChange={(e) => setField('email', e.target.value)}
+              placeholder="e.g. ada@company.com"
+              required
+            />
+          </Field>
 
-              <Field
-                label={selected ? 'New password' : 'Password'}
+          <Field
+            label={selected ? 'New password' : 'Password'}
+            required={!selected}
+            hint={selected ? 'Leave blank to keep the current password.' : 'Share it with the person; they can’t change it themselves yet.'}
+          >
+            <div className="control-affix">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={values.password}
+                onChange={(e) => setField('password', e.target.value)}
+                placeholder={selected ? '••••••••' : 'Temporary password'}
                 required={!selected}
-                hint={selected ? 'Leave blank to keep the current password.' : 'Share it with the person; they can’t change it themselves yet.'}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
               >
-                <Input
-                  type="password"
-                  value={values.password}
-                  onChange={(e) => setField('password', e.target.value)}
-                  placeholder={selected ? '••••••••' : 'Temporary password'}
-                  required={!selected}
-                  autoComplete="new-password"
-                />
-              </Field>
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </Field>
 
-              <Field label="Account status" hint={selected && isSelf(selected) ? 'You cannot deactivate yourself.' : undefined}>
-                <Select
-                  value={values.is_active ? 'active' : 'inactive'}
-                  disabled={selected && isSelf(selected)}
-                  onChange={(e) => setField('is_active', e.target.value === 'active')}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive — cannot sign in</option>
-                </Select>
-              </Field>
+          <Field label="Account status" hint={selected && isSelf(selected) ? 'You cannot deactivate yourself.' : undefined}>
+            <Select
+              value={values.is_active ? 'active' : 'inactive'}
+              disabled={selected && isSelf(selected)}
+              onChange={(e) => setField('is_active', e.target.value === 'active')}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive — cannot sign in</option>
+            </Select>
+          </Field>
 
-              <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
-                <span className="field-label">Module access</span>
-                <div className="perm-grid">
-                  {PERMISSIONS.map((p) => {
-                    const Icon = p.icon
-                    return (
-                      <label key={p.key} className="check-field">
-                        <input
-                          type="checkbox"
-                          checked={!!values[p.key]}
-                          onChange={(e) => setField(p.key, e.target.checked)}
-                        />
-                        <span>
-                          <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
-                            <Icon size={14} className="muted" /> {p.label}
-                          </span>
-                          <span className="field-hint muted">{p.hint}</span>
-                        </span>
-                      </label>
-                    )
-                  })}
-                </div>
-                <span className="field-hint muted">
-                  All four together make an administrator. User management needs People &amp; Payroll.
+          <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
+            <span className="field-label">Module access</span>
+            <div className="perm-grid">
+              {PERMISSIONS.map((p) => {
+                const Icon = p.icon
+                return (
+                  <label key={p.key} className="check-field">
+                    <input
+                      type="checkbox"
+                      checked={!!values[p.key]}
+                      onChange={(e) => setField(p.key, e.target.checked)}
+                    />
+                    <span>
+                      <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
+                        <Icon size={14} className="muted" /> {p.label}
+                      </span>
+                      <span className="field-hint muted">{p.hint}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <span className="field-hint muted">
+              All four together make an administrator. User management needs People &amp; Payroll.
+            </span>
+          </div>
+
+          <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
+            <span className="field-label">Notifications</span>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={!!values.send_summary}
+                onChange={(e) => setField('send_summary', e.target.checked)}
+              />
+              <span>
+                <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
+                  <Mail size={14} className="muted" /> Receive project summary email
                 </span>
-              </div>
-
-              <div className="col gap-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
-                <span className="field-label">Notifications</span>
-                <label className="check-field">
-                  <input
-                    type="checkbox"
-                    checked={!!values.send_summary}
-                    onChange={(e) => setField('send_summary', e.target.checked)}
-                  />
-                  <span>
-                    <span className="field-label row gap-2" style={{ alignItems: 'center' }}>
-                      <Mail size={14} className="muted" /> Receive project summary email
-                    </span>
-                    <span className="field-hint muted">
-                      AI-written status summary of every module, sent on the schedule set in the server config. Inactive accounts are skipped.
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="row gap-2" style={{ justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 'var(--s-3)' }}>
-                {selected && (
-                  <Button variant="ghost" icon={X} onClick={cancelEdit} disabled={saving}>
-                    Cancel
-                  </Button>
-                )}
-                <Button type="submit" icon={selected ? ShieldCheck : UserPlus} loading={saving}>
-                  {selected ? 'Save changes' : 'Create user'}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      </div>
+                <span className="field-hint muted">
+                  AI-written status summary of every module, sent on the schedule set in the server config. Inactive accounts are skipped.
+                </span>
+              </span>
+            </label>
+          </div>
+        </form>
+      </Drawer>
 
       <ConfirmDialog
         open={!!pendingRemove}

@@ -207,8 +207,7 @@ async def paycheck_calculate_and_send_mail() -> None:
     Returns:
         None
     """
-    payroll_log = system_log()
-    payroll_log.info('[PAYCHECK_SCHEDULE] Start')
+    log.info('[PAYCHECK_SCHEDULE] Start')
     # Get all user's payment
     async with SessionLocal() as session:
         stmt = select(hr.Paycheck, auth.User.email).join(
@@ -217,11 +216,12 @@ async def paycheck_calculate_and_send_mail() -> None:
         ).where(auth.User.is_active == True)
         employees_to_pay = (await session.execute(stmt)).all()
 
-    payroll_log.info(f'[PAYCHECK_SCHEDULE] Sending payroll to {len(employees_to_pay)} employee(s)')
+    log.info(f'[PAYCHECK_SCHEDULE] Sending payroll to {len(employees_to_pay)} employee(s)')
     if employees_to_pay:
         # Send mail to employee's email for now
         sent_mail_list = []
-        add_to_db_count = 0
+        paid_count = 0
+        failed_count = 0
         for paycheck, email in employees_to_pay:
             # Create payroll and write database
             async with SessionLocal() as session:
@@ -232,11 +232,13 @@ async def paycheck_calculate_and_send_mail() -> None:
                     session.add(payroll_data)
                     await session.commit()
                     await session.refresh(payroll_data)
+                    paid_count += 1
 
+                    # The payout row is already stored as pending, the mail outcome is written onto it afterwards
                     try:
                         # Construct email body
-                        pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.net_pay],
-                                                 index=['base salary', 'allowances', 'net pay'], columns=['Amount'])
+                        pay_table = pd.DataFrame([paycheck.base_salary, paycheck.allowances, paycheck.deductions,paycheck.net_pay],
+                                                 index=['base salary', 'allowances', 'deductions', 'net pay'], columns=['Amount'])
                         pay_table_html = pay_table.to_html()
                         mail_body = f'''
                         <h2> Payroll </h2>
@@ -245,24 +247,33 @@ async def paycheck_calculate_and_send_mail() -> None:
                         '''
                         mail_subject = 'Payroll'
                         sent = await send_email([email], mail_subject, mail_body, html=True)
-                        sent_mail_list += sent
-                        add_to_db_count += 1
+                        if email in sent:
+                            payroll_data.mail_status = hr.PayrollMailStatus.SENT
+                            sent_mail_list += sent
+                        else:
+                            # A refused address is not always an exception, it can just be missing from the accepted list
+                            payroll_data.mail_status = hr.PayrollMailStatus.FAILED
+                            payroll_data.mail_error = f'{email} was refused by the mail server'
+                            failed_count += 1
 
-                    except Exception as e:
-                        payroll_log.error(f'[PAYCHECK_SCHEDULE] Error occur when sending payroll {e}')
-                except Exception as e:
-                    payroll_log.error(f"[PAYCHECK_SCHEDULE] Error occur when Adding paycheck to payroll {e}")
-
-
+                    except Exception as err:
+                        payroll_data.mail_status = hr.PayrollMailStatus.FAILED
+                        payroll_data.mail_error = str(err)
+                        failed_count += 1
+                        log.error(f'[PAYCHECK_SCHEDULE] Scheduler: payslip mail for user {paycheck.user_id} failed: {format_exc()}')
+                    await session.commit()
+                except Exception:
+                    # Either the payout row or its mail result could not be written, a row that is already stored stays pending
+                    log.error(f'[PAYCHECK_SCHEDULE] Scheduler: writing the payout or its mail result of user {paycheck.user_id} failed: {format_exc()}')
 
         sent_mail_text = ', '.join(sent_mail_list)
-        payroll_log.info('[PAYCHECK_SCHEDULE] Process completed, payroll sent to ' + str(add_to_db_count) + 'users: ' + sent_mail_text)
+        log.info(f'[PAYCHECK_SCHEDULE] Process completed, {paid_count} of {len(employees_to_pay)} payout(s) recorded, {len(sent_mail_list)} payslip(s) sent, {failed_count} failed: {sent_mail_text}')
 
 def start_scheduler() -> None:
     """
     Register the background jobs and start the scheduler, must run inside the event loop (the FastAPI lifespan does)
-    Jobs: `github_sync` (GITHUB_SYNC_CRON), `expense_status` (EXPENSE_STATUS_CRON) and `summary_mail` (SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ / SUMMARY_SEND_WEEKDAY / SUMMARY_SEND_MONTHDAY,
-    recipients = users with `send_summary`). Planned, not implemented: the monthly payroll job (PAYCHECK_CALCULATE_TIMESPOT)
+    Jobs: `github_sync` (GITHUB_SYNC_CRON), `expense_status` (EXPENSE_STATUS_CRON), `summary_mail` (SUMMARY_SEND_TIME / SUMMARY_SEND_FREQ / SUMMARY_SEND_WEEKDAY / SUMMARY_SEND_MONTHDAY,
+    recipients = users with `send_summary`) and `paycheck_calculate_and_send_mail` (PAYCHECK_CALCULATE_TIMESPOT, one payout row and one payslip mail per paycheck of an active user)
     """
     log.info('[SCHEDULER] Function started')
     try:
@@ -289,8 +300,11 @@ def start_scheduler() -> None:
     scheduler.add_job(send_summary, summary_trigger, id='summary_mail', name='Project summary mail', replace_existing=True, misfire_grace_time=3600, coalesce=True)
 
     # Payroll schedules
-    payroll_trigger = CronTrigger.from_crontab(settings.PAYCHECK_CALCULATE_TIMESPOT)
-    scheduler.add_job(paycheck_calculate_and_send_mail, trigger=payroll_trigger, id='paycheck_calculate_and_send_mail')
+    try:
+        payroll_trigger = CronTrigger.from_crontab(settings.PAYCHECK_CALCULATE_TIMESPOT)
+        scheduler.add_job(paycheck_calculate_and_send_mail, trigger=payroll_trigger, id='paycheck_calculate_and_send_mail')
+    except ValueError as err:
+        log.error(f"[SCHEDULER] invalid PAYCHECK_CALCULATE_TIMESPOT '{settings.PAYCHECK_CALCULATE_TIMESPOT}' ({err}), Payroll will not send")
 
     scheduler.start()
     log.info(f'[SCHEDULER]  Initialized and started ({len(scheduler.get_jobs())} job(s)).')

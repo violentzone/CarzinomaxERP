@@ -48,7 +48,7 @@ Sign in with the admin seeded by the backend on first boot (the `ADMIN_EMAIL` /
 src/
   api/            One module per backend router (auth, hr, finance, scm, devTracking, chatbot)
   components/
-    ui/           Design-system kit: Button, Card, StatCard, Table, Modal, Tabs,
+    ui/           Design-system kit: Button, Card, StatCard, Table, Modal, Drawer, Tabs,
                   Badge, Field, ConfirmDialog, EmptyState, Toast, …
     layout/       AppLayout (shell), Sidebar (permission-gated nav), topbar
     chat/         ChatPanel (assistant drawer: transcript, approval card, composer with attachments)
@@ -115,6 +115,17 @@ token) clears the session and returns you to the login screen.
   in on save when the field is blank. Leave approve/reject records
   you as `approved_by_id`. The attendance punch bar clocks a member in with a
   new log at "now", or closes their latest open log and fills `total_hours`.
+  The **Payouts** tab is read-only: it lists what the monthly payroll run
+  recorded (`GET /hr/payroll_list`) with the payslip mail result of each payout
+  (sent, failed with the reason, or not confirmed). Filters: period (presets or
+  from / to dates), member, and what to show. It also lists members who have a
+  paycheck but no payout in a whole month of the period ("No payout", or "No
+  payout yet" for the current month), flags members paid more often in a month
+  than they have paychecks, and payouts whose amounts differ from the current
+  paycheck. These checks compare with today's paychecks and active users, so a
+  paycheck edited after a payout shows as a difference; a paycheck set up
+  during a month is expected from the following month on. Times are the
+  server's clock.
 - **Finance** — the ledger records each expense's type, amount, vendor, invoice
   number, category, document / due / paid / planned-payment dates and an optional project (the
   project field and column appear only with dev access). The **Payments** tab is the

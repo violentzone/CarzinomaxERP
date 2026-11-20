@@ -1,7 +1,7 @@
 """
-HR module, Query, add, remove and update User, Department, AttendanceLog, LeaveRequest and Paycheck
+HR module, Query, add, remove and update User, Department, AttendanceLog, LeaveRequest and Paycheck; Payroll (the payout records) is read-only
 """
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timedelta
 from traceback import format_exc
 from uuid import UUID
 
@@ -15,7 +15,7 @@ from app.api.common import get_current_user, permission_check
 from app.core.database import get_db
 from app.core.log_module import user_log
 from app.core.security import get_password_hash
-from app.models import AttendanceLog, Department, LeaveRequest, Paycheck, User
+from app.models import AttendanceLog, Department, LeaveRequest, Paycheck, Payroll, PayrollMailStatus, User
 
 hr_router = APIRouter(prefix="/hr", tags=["HR"])
 
@@ -967,3 +967,47 @@ async def delete_paycheck(paycheck_id: UUID, current_user: User = Depends(get_cu
     except Exception as err:
         log.error(f'[PAYCHECK] Failed to delete paycheck: {format_exc()}')
         return JSONResponse({"status": "fail", 'error': str(err)}, status_code=status.HTTP_400_BAD_REQUEST, media_type='application/json')
+
+
+# ---------------------------------------------------------------------------
+# Payroll
+# ---------------------------------------------------------------------------
+
+@hr_router.get("/payroll_list")
+async def get_payroll_list(user_id: int | None = None, start_date: date_type | None = None, end_date: date_type | None = None, mail_status: PayrollMailStatus | None = None, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    """
+    Get the payout records the payroll job wrote, filtered by the query parameters that are given; payrolls are read-only
+    Args:
+        user_id: Employee the payouts belong to, None for every employee
+        start_date: Earliest day of `pay_time` to include (inclusive), None for no lower bound
+        end_date: Latest day of `pay_time` to include (inclusive), None for no upper bound
+        mail_status: Payslip mail outcome (pending / sent / failed), None for every outcome
+        current_user: Signed in user
+        db: Database session(Created by `get_db`)
+
+    Returns:
+        Jsonified list of Payroll objects
+    """
+    log = user_log(current_user.id)
+    if not await permission_check('hr', current_user.id, db):
+        denied = JSONResponse({"status": "fail", "error": "Permission denied"}, status_code=status.HTTP_403_FORBIDDEN, media_type='application/json')
+        return denied
+    log.info(f'[PAYROLL] Query payrolls with user_id={user_id}, start_date={start_date}, end_date={end_date}, mail_status={mail_status}')
+    stmt = select(Payroll)
+    if user_id is not None:
+        stmt = stmt.where(Payroll.user_id == user_id)
+    if start_date is not None:
+        stmt = stmt.where(Payroll.pay_time >= datetime.combine(start_date, datetime.min.time()))
+    if end_date is not None:
+        # pay_time is a DateTime, an inclusive end date means before the next midnight
+        stmt = stmt.where(Payroll.pay_time < datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+    if mail_status is not None:
+        stmt = stmt.where(Payroll.mail_status == mail_status)
+    payrolls = (await db.scalars(stmt)).all()
+    data = []
+    for p in payrolls:
+        data.append(p.to_dict())
+    log.info(f"[PAYROLL] {str(len(data))} payrolls found")
+
+    response = JSONResponse({"status": "success", "data": data}, status_code=status.HTTP_200_OK, media_type='application/json')
+    return response

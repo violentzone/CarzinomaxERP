@@ -71,7 +71,7 @@ assistant.
 | Area | Status | Notes |
 |------|--------|-------|
 | **Auth & access control** | ✅ Working | JWT login/logout (logout revokes every earlier token), seeded admin, per-module access flags |
-| **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (base + allowances − deductions) |
+| **People & Payroll (HR)** | ✅ Working | Every user is an employee. Departments, attendance clock-in/out with hours, leave requests with approve/reject, paychecks (the standing pay setup of an employee: base + allowances − deductions). The monthly payroll job pays every paycheck of an active user: it records the payout and mails the employee a payslip. The **Payouts** tab lists those records read-only (`GET /hr/payroll_list`) so HR can check that everyone was paid: filters on period, member and what to show, the payslip mail result per payout (sent / failed with the reason / not confirmed), and checks for members with no payout in a month, members paid more often than they have paychecks and payouts that differ from the current paycheck. The checks compare with today's paychecks and active users and assume one run per calendar month. No chat tool for payouts yet |
 | **Dev Tracking** | ✅ Working | Projects, money invested per project (the investment expenses booked in Finance against the project, listed read-only), download/star snapshots per platform (GitHub, Docker Hub, npm). GitHub repos linked to a project are synced when added, automatically and on demand (stars + release-asset downloads); the Dev Tracking page lists and adds them under its GitHub repos tab |
 | **Finance** | ✅ Working | Expense ledger: type (paycheck / petty cash / investment / other), amount, vendor, invoice number, category, document date, due date, paid date, planned payment date, a derived payment status (paid / unpaid / overdue), optional dev project link and the receipt it was booked from. Unpaid and overdue bills are shown on the ledger and the overview; the Payments tab is the accountant's worklist (due today, missed, upcoming, unplanned) with one-click "Mark paid". An `investment` linked to a project is what Dev Tracking shows as that project's spend. The overview rolls payroll, project investments and the ledger (total, unpaid, overdue, due for payment today) into one view, each figure shown only when your account holds that module's flag |
 | **Products & Purchases (SCM)** | ✅ Working | Two pages behind the same access flag. **Products**: the company's software products (SKU, price, margin, copies sold) with tiles for copies sold, sales value and margin and a copies-sold chart; the chat assistant can read, create, update and (with approval) delete them. **Purchases**: goods the company buys (item, category, unit price, quantity, a total the server computes) with search, a category filter, spend tiles and a breakdown by category and month. Purchases are REST and frontend only: the chat assistant does not know them yet, and there are no vendors or purchase orders |
@@ -79,7 +79,7 @@ assistant.
 | **LLM connection** | ✅ Working | Provider-agnostic via [litellm](https://github.com/BerriAI/litellm) (LangChain `ChatLiteLLM`): hosted APIs or a local server, one shared model client for the chat assistant and the summary mail. Connection is verified at startup |
 | **Chat control** | 🚧 Minimal | In-app assistant: every module can be read, created and updated from chat through a LangChain orchestrator with per-module sub-agents; deletes pause for your approval. Approval state is in-memory (lost on restart). A receipt image or PDF attached to a message is read by the assistant (the configured model must accept image input, see "Pick an LLM") and booked as an expense when you ask |
 | **AI back office** | ✅ Working | The "receipt → booked" flow above: upload → AI draft → confirm works on the Finance page and in the chat, and the bill can be scheduled (planned payment date, Payments tab, chat). The payment itself is made by hand and then marked paid: there is no banking integration, so money never moves through the system |
-| **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `expense_status` job re-derives the payment status of open bills on `EXPENSE_STATUS_CRON` (default 00:05 daily) so they turn overdue; the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail). The monthly payroll run is still planned |
+| **Background scheduler** | ✅ Working | APScheduler starts with the app; the `github_sync` job refreshes tracked GitHub repos on `GITHUB_SYNC_CRON` (default every 6 h); the `expense_status` job re-derives the payment status of open bills on `EXPENSE_STATUS_CRON` (default 00:05 daily) so they turn overdue; the `summary_mail` job asks the LLM for a Markdown status summary of every table and mails it over `SMTP_*` to every user with the "Receive project summary email" toggle on, daily / weekly / monthly at `SUMMARY_SEND_TIME` per `SUMMARY_SEND_FREQ` (no opt-in, no LLM call and no mail); the `paycheck_calculate_and_send_mail` job runs on `PAYCHECK_CALCULATE_TIMESPOT` (default 00:00 on the 1st of the month), writes one payout record per paycheck of an active user and mails that user an HTML payslip over `SMTP_*`, then stores on the record whether that mail was sent or failed. Money still moves outside the system. A payroll run that falls while the server is down is not caught up and nothing stops a second run in the same month (the Payouts tab shows both cases); an invalid `PAYCHECK_CALCULATE_TIMESPOT` is logged and the job is skipped |
 
 Every module endpoint answers with the same envelope, so the frontend and any
 future AI agent share one contract:
@@ -125,9 +125,10 @@ cp backend/.env.example backend/.env
 #   ADMIN_EMAIL, ADMIN_PASSWORD, SECRET_KEY
 #   APP_DB_PASSWORD (password of the `carzinomax` database role the first migration creates for the backend, see "Database roles";
 #   optional APP_DB_USER renames it)
-#   SMTP_HOSTNAME / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password)
+#   SMTP_HOSTNAME / SMTP_PORT / SMTP_PASSWORD / MAIL_FROM (outgoing mail, e.g. Gmail with an App Password; MAIL_FROM is also the mailbox login)
 #   SUMMARY_SEND_TIME (hour 0-23) / SUMMARY_SEND_FREQ (day|week|month), plus SUMMARY_SEND_WEEKDAY (0-6, Mon=0) for week or SUMMARY_SEND_MONTHDAY (1-31) for month
-#   optional: PAYCHECK_CALCULATE_TIMESPOT, LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
+#   optional: PAYCHECK_CALCULATE_TIMESPOT (cron of the monthly payroll run, default 00:00 on the 1st), EXPENSE_STATUS_CRON (default 00:05 daily)
+#   optional: LLM_TYPE / LLM_MODEL / LLM_API_KEY / LLM_API_BASE
 #   optional: UPLOAD_DIR, UPLOAD_MAX_BYTES (receipts and chat attachments; default backend/uploads and 10 MB per file)
 #   optional: GITHUB_TOKEN (required only for private repos; lifts GitHub's API limit), GITHUB_SYNC_CRON (default every 6 h)
 #   ADMIN_DB_CONNECTION can stay as-is — Compose points the backend at the bundled database
@@ -278,7 +279,7 @@ All routes live under `/api/v1` and, except for login, expect an
 | Router | Endpoints |
 |--------|-----------|
 | `/auth` | `POST /login`, `POST /logout`, `GET /me` |
-| `/hr` | users (employees), departments, attendance, leave requests, paychecks |
+| `/hr` | users (employees), departments, attendance, leave requests, paychecks; `GET /payroll_list` lists the payout records (read-only, optional `user_id`, `start_date`, `end_date`, `mail_status`) |
 | `/finance` | expenses; `POST /receipt` uploads a receipt or invoice (PNG / JPEG / WebP / PDF, 10 MB) and answers with an AI-read expense draft plus the stored `receipt_path`, nothing is booked until `POST /expense`; `GET /expense/{id}/receipt` serves the stored file back |
 | `/scm` | products, purchases (`total` = `unit_price` × `amount`, computed on create and update) |
 | `/dev_tracking` | projects, investments, downloads, github_repo (tracked repos); `POST /github_sync[/{repo_id}]` refreshes stars + downloads now |
@@ -301,7 +302,9 @@ Lists are `GET /<module>/<thing>_list`; single records are
 - [x] Finance: amounts, vendors, invoice numbers, categories, document / due / paid dates, project link
 - [x] **AI "receipt → booked" flow**: upload a receipt, confirm the AI draft, booked (Finance page and chat)
 - [x] Scheduling the payment of a booked expense (planned payment date + Payments tab; paying stays manual)
-- [ ] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`)
+- [x] Monthly payroll job on the scheduler (`PAYCHECK_CALCULATE_TIMESPOT`): payout record + payslip mail per employee
+- [x] Payroll: payout history in the app (Payouts tab with payslip mail result and missing / extra / differing payout checks)
+- [ ] Payroll: catch-up of a run missed while the server was down, guard against a second run in the same month
 - [x] Scheduled project summary email (`summary_mail` job on `SUMMARY_SEND_*`, LLM-written, sent to users who opted in)
 - [ ] "Chase overdue invoices" — AI-drafted AR reminders
 - [x] Purchases: record goods bought, with quantities and spend totals
