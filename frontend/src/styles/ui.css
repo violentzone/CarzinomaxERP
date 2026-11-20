@@ -250,6 +250,34 @@ textarea.control { resize: vertical; min-height: 68px; }
   background: var(--surface-2);
 }
 
+/* ------------------------------ Drawer ------------------------------ */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(12, 10, 20, 0.55);
+  backdrop-filter: blur(4px);
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 101;
+  width: min(100vw, 420px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.drawer-body { flex: 1; overflow-y: auto; padding: var(--s-5); }
+
+/* Control with a trailing icon button (password show / hide). */
+.control-affix { position: relative; }
+.control-affix .control { padding-right: 42px; }
+.control-affix .icon-btn { position: absolute; top: 50%; right: 4px; width: 30px; height: 30px; transform: translateY(-50%); }
+
 /* ------------------------------ Tabs ------------------------------ */
 .tabs {
   display: flex;

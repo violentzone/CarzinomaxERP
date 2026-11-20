@@ -48,7 +48,7 @@ Sign in with the admin seeded by the backend on first boot (the `ADMIN_EMAIL` /
 src/
   api/            One module per backend router (auth, hr, finance, scm, devTracking, chatbot)
   components/
-    ui/           Design-system kit: Button, Card, StatCard, Table, Modal, Tabs,
+    ui/           Design-system kit: Button, Card, StatCard, Table, Modal, Drawer, Tabs,
                   Badge, Field, ConfirmDialog, EmptyState, Toast, …
     layout/       AppLayout (shell), Sidebar (permission-gated nav), topbar
     chat/         ChatPanel (assistant drawer: transcript, approval card, composer with attachments)
