@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Building2, CalendarDays, Clock, Users, Wallet, ShieldCheck } from 'lucide-react'
+import { Banknote, Building2, CalendarDays, Clock, Users, Wallet, ShieldCheck } from 'lucide-react'
 import PageHeader from '../../components/ui/PageHeader'
 import Tabs from '../../components/ui/Tabs'
 import Button from '../../components/ui/Button'
@@ -8,11 +8,13 @@ import ResourceSection from '../../components/ResourceSection'
 import { hrApi } from '../../api/hr'
 import { useUsers } from '../../lib/useUsers'
 import PaychecksSection from './PaychecksSection'
+import PayrollsSection from './PayrollsSection'
 import LeavesSection from './LeavesSection'
 import AttendanceSection from './AttendanceSection'
 
 const TABS = [
   { key: 'paychecks', label: 'Paychecks', icon: Wallet },
+  { key: 'payrolls', label: 'Payouts', icon: Banknote },
   { key: 'leaves', label: 'Leave', icon: CalendarDays },
   { key: 'attendance', label: 'Attendance', icon: Clock },
   { key: 'departments', label: 'Departments', icon: Building2 },
@@ -40,6 +42,7 @@ export default function HrPage() {
 
       <div className="tab-panel">
         {tab === 'paychecks' && <PaychecksSection />}
+        {tab === 'payrolls' && <PayrollsSection />}
         {tab === 'leaves' && <LeavesSection />}
         {tab === 'attendance' && <AttendanceSection />}
         {tab === 'departments' && <DepartmentsSection />}

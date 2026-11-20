@@ -37,4 +37,7 @@ export const hrApi = {
   createPaycheck: (payload) => apiPost('/hr/paycheck', payload),
   updatePaycheck: (id, payload) => apiPut(`/hr/paycheck/${id}`, payload),
   deletePaycheck: (id) => apiDelete(`/hr/paycheck/${id}`),
+
+  // Payrolls: the payout records the monthly payroll run wrote, read-only
+  listPayrolls: (params) => apiGet('/hr/payroll_list', params),
 }

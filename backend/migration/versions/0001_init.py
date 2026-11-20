@@ -262,6 +262,8 @@ def upgrade() -> None:
     sa.Column('deductions', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('net_pay', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('pay_time', sa.DateTime(), nullable=False),
+    sa.Column('mail_status', sa.Enum('pending', 'sent', 'failed', name='payrollmailstatus', native_enum=False, create_constraint=True, length=32), server_default='pending', nullable=False),
+    sa.Column('mail_error', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
